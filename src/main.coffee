@@ -1,0 +1,135 @@
+_          = require "underscore"
+async      = require "async"
+config     = require "config"
+debug      = (require "debug") "app:main"
+devicemqtt = require "device-mqtt"
+os         = require "os"
+
+log          = require("./lib/Logger") "Main"
+Docker       = require "./lib/Docker"
+AppUpdater   = require './manager/AppUpdater'
+StateManager = require './manager/StateManager'
+
+mqttSocket    = null
+getMqttSocket = -> mqttSocket
+
+lastWill =
+	topic   : "devices/#{config.host}/status"
+	payload : "offline"
+
+queue = async.queue (task, cb) ->
+	log.info "Executing action: `#{task.name}`"
+	task.fn cb
+
+todo = (queue) ->
+	[]
+		.concat queue.workersList().map    (item) -> item.data.name
+		.concat queue._tasks.toArray().map (item) -> item.name
+
+log.info "Booting up manager..."
+
+docker     = new Docker   config.docker
+state      = StateManager config, getMqttSocket, docker
+appUpdater = AppUpdater   docker, state
+
+docker.on "logs", (data) ->
+	return unless data # The logsparser currently returns undefined if it can't parse the logs... meh
+	state.publishLog data
+
+{ execute } = require("./manager/actionsMap") docker, state, appUpdater
+
+client = devicemqtt _.extend {}, config.mqtt, (if config.development then tls: null else {})
+
+client.on "connected", (socket) ->
+	log.info "Connected to the MQTT Broker socket id: #{socket.id}"
+
+	mqttSocket = socket
+
+	state.notifyOnlineStatus()
+	state.throttledSendState()
+	state.sendNsState()
+
+	_onAction = (action, payload, reply) ->
+		log.info "New action received: \nAction:  #{action}\nPayload: #{JSON.stringify payload}"
+		debug "Action queue length: #{queue.length()}"
+		task =
+			name: action
+			fn: (cb) ->
+				debug "Action queue length: #{queue.length()}"
+				debug "Action `#{action}` being executed"
+				execute { action, payload }, (error, result) ->
+					debug "Received an error: #{error.message}" if error
+					debug "Received result for action: #{action} - #{result}"
+
+					if error
+						return reply.send type: "error", data: error.message, (mqttErr, ack) ->
+							log.error "An error occurred sending the message: #{error.message}" if mqttErr
+							return cb()
+
+					reply.send type: "success", data: result, (error, ack) ->
+						log.error "An error occurred sending the message: #{error.message}" if error
+
+						# TODO give actions some sort of meta so we can act accordingly when they error/succeed
+						return cb() if action is "getContainerLogs"
+						return cb() if action is "refreshState"
+
+						debug "Action `#{action}` kicking state"
+						# TODO No remove...
+						state.throttledSendState()
+
+						cb()
+
+		queue.push task, (error) ->
+			debug "Action queue length: #{queue.length()}"
+			state.publishNamespacedState queue: todo queue
+
+			if error
+				state.updateFinishedQueueList
+					exitState: "error"
+					message:   error.message
+					name:      task.name
+					timestamp: Date.now()
+				return log.error "Error processing action `#{action}`: #{error.message}"
+
+			log.info "Action #{action} completed"
+			state.updateFinishedQueueList
+				exitState: "success"
+				message:   "done"
+				name:      task.name
+				timestamp: Date.now()
+
+		state.publishNamespacedState queue: todo queue
+
+	_onSocketError = (error) ->
+		log.error "MQTT socket error!: #{error.message}" if error
+
+	socket
+		.on   "action",               _onAction
+		.on   "error",                _onSocketError
+		.on   "global:collection",    appUpdater.debouncedHandleCollection
+		.once "disconnected", ->
+			log.warn "Disconnected from mqtt"
+			socket.removeListener "action",               _onAction
+			socket.removeListener "error",                _onSocketError
+			socket.removeListener "global:collection",    appUpdater.debouncedHandleCollection
+
+			# HACK:
+			throw new Error "Disconnected! Killing myself!"
+
+debug "Connecting to mqtt at #{config.mqtt.host}:#{config.mqtt.port}"
+client
+	.on "error", (error) ->
+		log.error "MWTT client error occurred: #{error.message}"
+		throw error if error.message?.includes "EAI_AGAIN"
+
+	.on "reconnecting", (error) ->
+		log.info "Reconectiiing"
+
+	.connect lastWill
+
+module.exports = {
+	client
+	queue
+	mqttSocket
+	state
+}
