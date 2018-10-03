@@ -13,7 +13,6 @@
   },
   "license": "GPL-3.0",
   "devDependencies": {
-    "coffee-script": "^1.12.7",
     "coffeescope2": "^0.5.1",
     "coffeetape": "^1.0.1",
     "gulp": "^3.9.1",
@@ -28,8 +27,9 @@
     "tape": "^4.9.0"
   },
   "dependencies": {
-    "@tn-group/app-layer-logic": "^1.2.1",
+    "@tn-group/app-layer-logic": "^1.2.2",
     "async": "^2.6.0",
+    "coffee-script": "^1.12.7",
     "config": "^1.30.0",
     "debug": "^3.1.0",
     "device-mqtt": "^1.0.10",
