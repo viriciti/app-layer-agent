@@ -27,7 +27,7 @@
     "tape": "^4.9.0"
   },
   "dependencies": {
-    "@tn-group/app-layer-logic": "^1.2.2",
+    "@tn-group/app-layer-logic": "^1.2.3",
     "async": "^2.6.0",
     "coffee-script": "^1.12.7",
     "config": "^1.30.0",
