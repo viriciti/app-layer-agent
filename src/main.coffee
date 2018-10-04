@@ -9,6 +9,7 @@ log          = require("./lib/Logger") "Main"
 Docker       = require "./lib/Docker"
 AppUpdater   = require './manager/AppUpdater'
 StateManager = require './manager/StateManager'
+{ execute }  = require("./manager/actionsMap") docker, state, appUpdater
 
 mqttSocket    = null
 getMqttSocket = -> mqttSocket
@@ -32,13 +33,13 @@ docker     = new Docker   config.docker
 state      = StateManager config, getMqttSocket, docker
 appUpdater = AppUpdater   docker, state
 
-docker.on "logs", (data) ->
-	return unless data # The logsparser currently returns undefined if it can't parse the logs... meh
-	state.publishLog data
+options      = _.extend {}, config.mqtt
+options      = _.omit options, "tls" if config.development
+options.host = process.env.MQTT_HOST if process.env.MQTT_HOST
+options.port = process.env.MQTT_PORT if process.env.MQTT_PORT
+client       = devicemqtt options
 
-{ execute } = require("./manager/actionsMap") docker, state, appUpdater
-
-client = devicemqtt _.extend {}, config.mqtt, (if config.development then tls: null else {})
+log.info "Connecting to #{if options.tls then 'mqtts' else 'mqtt'}://#{options.host}:#{options.port}"
 
 client.on "connected", (socket) ->
 	log.info "Connected to the MQTT Broker socket id: #{socket.id}"
@@ -116,15 +117,17 @@ client.on "connected", (socket) ->
 			# HACK:
 			throw new Error "Disconnected! Killing myself!"
 
+docker.on "logs", (data) ->
+	return unless data # The logsparser currently returns undefined if it can't parse the logs... meh
+	state.publishLog data
+
 debug "Connecting to mqtt at #{config.mqtt.host}:#{config.mqtt.port}"
 client
 	.on "error", (error) ->
-		log.error "MWTT client error occurred: #{error.message}"
+		log.error "MQTT client error occurred: #{error.message}"
 		throw error if error.message?.includes "EAI_AGAIN"
-
 	.on "reconnecting", (error) ->
-		log.info "Reconectiiing"
-
+		log.info "Reconnecting ..."
 	.connect lastWill
 
 module.exports = {
