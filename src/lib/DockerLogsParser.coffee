@@ -1,9 +1,9 @@
 class DockerLogsParser
 	constructor: (@docker) ->
 
+	# coffeelint: disable=cyclomatic_complexity
 	parseLogs: (logs) ->
-		if (logs.status is "die")
-			return @_handleDyingContainer logs
+		return @_handleDyingContainer logs if logs.status is "die"
 
 		switch logs.Type
 			when "image"
