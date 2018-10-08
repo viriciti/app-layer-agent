@@ -2,15 +2,10 @@ _        = require "underscore"
 async    = require "async"
 debug    = (require "debug") "app:state-manager"
 fs       = require "fs"
-path     = require "path"
-moment   = require "moment"
 os       = require "os"
-S        = require "string"
 
 getIpAddresses = require "../helpers/get_ipaddresses"
 log            = (require "../lib/Logger") "StateManager"
-
-DATE_FORMAT = "YYYY-MM-DD hh:mm:ss"
 
 module.exports = (config, getSocket, docker) ->
 	clientId   = config.host
@@ -115,6 +110,29 @@ module.exports = (config, getSocket, docker) ->
 
 		, -> cb?()
 
+	sendAppState = (state) ->
+		{ name, action, type } = state
+
+		async.waterfall [
+			(next) ->
+				return setImmediate next, null, {} if action in ["destroy"]
+
+				docker.getContainerByName name, next
+			(container, next) ->
+				container = _.pick container, ["Id", "name", "state"] if action in ["start", "stop", "die"]
+
+				customPublish
+					topic:   "devices/#{clientId}/appState/#{name}/#{action}"
+					message: JSON.stringify container
+					opts:
+						retain: false
+				, next
+		], (error) ->
+			return log.error "Error publishing app state for action #{action}: #{error.message}" if error
+
+			log.info "App state published for #{if name.startsWith("sha256") then "(hash)" else name}: #{type}.#{action}"
+
+
 	sendNsState = ->
 		async.eachOf nsState, (val, key, cb) ->
 			customPublish
@@ -123,7 +141,8 @@ module.exports = (config, getSocket, docker) ->
 				opts:    retain: true
 			, cb
 		, (error) ->
-			log.error "Error publishing namespaced state: #{error.message}" if error
+			return log.error "Error publishing namespaced state: #{error.message}" if error
+
 			log.info "Namespaced state published for #{_(nsState).keys().join ", "}"
 
 	getDeviceId = -> clientId
@@ -209,6 +228,7 @@ module.exports = (config, getSocket, docker) ->
 			cb null, state
 
 	return {
+		sendAppState
 		getDeviceId
 		getGlobalGroups
 		getGroups

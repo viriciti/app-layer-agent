@@ -3,13 +3,11 @@ async      = require "async"
 config     = require "config"
 debug      = (require "debug") "app:main"
 devicemqtt = require "device-mqtt"
-os         = require "os"
 
 log          = require("./lib/Logger") "Main"
 Docker       = require "./lib/Docker"
 AppUpdater   = require './manager/AppUpdater'
 StateManager = require './manager/StateManager'
-{ execute }  = require("./manager/actionsMap") docker, state, appUpdater
 
 mqttSocket    = null
 getMqttSocket = -> mqttSocket
@@ -29,9 +27,10 @@ todo = (queue) ->
 
 log.info "Booting up manager..."
 
-docker     = new Docker   config.docker
-state      = StateManager config, getMqttSocket, docker
-appUpdater = AppUpdater   docker, state
+docker      = new Docker   config.docker
+state       = StateManager config, getMqttSocket, docker
+appUpdater  = AppUpdater   docker, state
+{ execute } = require("./manager/actionsMap") docker, state, appUpdater
 
 options      = _.extend {}, config.mqtt
 options      = _.omit options, "tls" if config.development
@@ -119,7 +118,9 @@ client.on "connected", (socket) ->
 
 docker.on "logs", (data) ->
 	return unless data # The logsparser currently returns undefined if it can't parse the logs... meh
-	state.publishLog data
+
+	state.sendAppState data.action if data.action?.type is "container"
+	state.publishLog   data
 
 debug "Connecting to mqtt at #{config.mqtt.host}:#{config.mqtt.port}"
 client
