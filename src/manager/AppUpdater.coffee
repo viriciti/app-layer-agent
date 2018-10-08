@@ -55,13 +55,11 @@ module.exports = (docker, state) ->
 		debug "Global groups are", globalGroups
 		debug "Device groups are", deviceGroups
 
-		return cb new Error "Global groups is empty! Not proceding." if _.isEmpty globalGroups
+		return cb new Error "Global groups is empty! Not proceeding." if _.isEmpty globalGroups
 
 		if ((_(globalGroups).size() is 1) and not _(globalGroups).has "default")
 			return cb new Error "Size of global groups is 1, but the group is not default.
 				Global groups are misconfigured!"
-
-		state.publishNamespacedState updateState: { short: "Updating applications...", long: "Updating applications..." }
 
 		async.waterfall [
 			(cb) ->
@@ -80,6 +78,13 @@ module.exports = (docker, state) ->
 				next null, appsToChange
 
 			(appsToChange, next) ->
+				return setImmediate next unless appsToChange.install.length and appsToChange.remove.length
+
+				state.publishNamespacedState
+					updateState:
+						short: "Updating applications..."
+						long:  "Updating applications..."
+
 				async.series [
 					(cb) ->
 						docker.removeOldImages cb
@@ -101,15 +106,23 @@ module.exports = (docker, state) ->
 				], next
 
 		], (error) ->
+			# TODO: Verify if this is still needed
 			state.throttledSendState()
 
 			if error
 				log.error "Error during update: #{error.message}"
-				state.publishNamespacedState updateState: { short: "ERROR!", long: error.message}
+				state.publishNamespacedState
+					updateState:
+						short: "ERROR!"
+						long:  error.message
+
 				return cb error
 
 			log.info "Updating done."
-			state.publishNamespacedState updateState: { short: "Idle", long: "Idle"}
+			state.publishNamespacedState
+				updateState:
+					short: "Idle"
+					long:  "Idle"
 			cb()
 
 	_removeApps = (apps, cb) ->
