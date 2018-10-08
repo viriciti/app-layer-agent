@@ -115,7 +115,7 @@ module.exports = (config, getSocket, docker) ->
 
 		async.waterfall [
 			(next) ->
-				return setImmediate next, null, {} if action in ["destroy"]
+				return setImmediate next, null, {} if action is "destroy"
 
 				docker.getContainerByName name, next
 			(container, next) ->
@@ -130,8 +130,7 @@ module.exports = (config, getSocket, docker) ->
 		], (error) ->
 			return log.error "Error publishing app state for action #{action}: #{error.message}" if error
 
-			log.info "App state published for #{if name.startsWith("sha256") then "(hash)" else name}: #{type}.#{action}"
-
+			debug "App state published for #{name}: #{type}.#{action}"
 
 	sendNsState = ->
 		async.eachOf nsState, (val, key, cb) ->
