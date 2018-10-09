@@ -286,8 +286,6 @@ class Docker extends EventEmitter
 			cb null, "Container #{id} restarted correctly"
 
 	removeContainer: ({ id, force = false }, cb) ->
-		return cb()
-
 		log.info "Removing container `#{id}`"
 
 		@listContainers (error, containers) =>
