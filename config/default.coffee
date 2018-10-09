@@ -27,7 +27,9 @@ module.exports =
 	package:
 		path: path.resolve "#{__dirname}/../package.json"
 
-	sendStateThrottleTime: 10000
+	state:
+		sendStateThrottleTime:    10000
+		sendAppStateThrottleTime: 3000
 
 	docker:
 		layer:

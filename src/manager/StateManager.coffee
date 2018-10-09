@@ -54,7 +54,7 @@ module.exports = (config, getSocket, docker) ->
 
 				cb? error
 
-	throttledSendState = _.throttle (-> _sendStateToMqtt()), config.sendStateThrottleTime
+	throttledSendState = _.throttle (-> _sendStateToMqtt()), config.state.sendStateThrottleTime
 
 	notifyOnlineStatus = () ->
 		log.info "Setting status: online"
@@ -95,7 +95,7 @@ module.exports = (config, getSocket, docker) ->
 
 			log.warn "#{key}: Buffer.byteLength = #{byteLength}!" if byteLength > 1024
 
-			throttledCustomPublishes[key] or= _.throttle customPublish, config.sendStateThrottleTime
+			throttledCustomPublishes[key] or= _.throttle customPublish, config.state.sendStateThrottleTime
 
 			throttledCustomPublishes[key]
 				topic: "devices/#{clientId}/nsState/#{key}"
@@ -110,27 +110,20 @@ module.exports = (config, getSocket, docker) ->
 
 		, -> cb?()
 
-	sendAppState = (state) ->
-		{ name, action, type } = state
+	sendAppState = _.throttle ->
+		docker.listContainers (error, containers) ->
+			return log.error log.error if error
 
-		async.waterfall [
-			(next) ->
-				return setImmediate next, null, {} if action is "destroy"
+			customPublish
+				topic:   "devices/#{clientId}/nsState/containers"
+				message: JSON.stringify containers
+				opts:
+					retain: false
+			, (error) ->
+				return log.error "Error publishing app state: #{error.message}" if error
 
-				docker.getContainerByName name, next
-			(container, next) ->
-				container = _.pick container, ["Id", "name", "state"] if action in ["start", "stop", "die"]
-
-				customPublish
-					topic:   "devices/#{clientId}/appState/#{name}/#{action}"
-					message: JSON.stringify container
-					opts:
-						retain: false
-				, next
-		], (error) ->
-			return log.error "Error publishing app state for action #{action}: #{error.message}" if error
-
-			debug "App state published for #{name}: #{type}.#{action}"
+				debug "App state published"
+	, config.state.sendAppStateThrottleTime
 
 	sendNsState = ->
 		async.eachOf nsState, (val, key, cb) ->
