@@ -110,7 +110,7 @@ module.exports = (config, getSocket, docker) ->
 
 		, -> cb?()
 
-	sendAppState = _.throttle ->
+	throttledSendAppState = _.throttle ->
 		docker.listContainers (error, containers) ->
 			return log.error log.error if error
 
@@ -220,7 +220,6 @@ module.exports = (config, getSocket, docker) ->
 			cb null, state
 
 	return {
-		sendAppState
 		getDeviceId
 		getGlobalGroups
 		getGroups
@@ -230,6 +229,7 @@ module.exports = (config, getSocket, docker) ->
 		updateFinishedQueueList
 		setGlobalGroups
 		setGroups
+		throttledSendAppState
 		throttledSendState
 		sendNsState
 	}

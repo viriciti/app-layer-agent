@@ -106,7 +106,6 @@ module.exports = (docker, state) ->
 				], next
 
 		], (error) ->
-			# TODO: Verify if this is still needed
 			state.throttledSendState()
 
 			if error

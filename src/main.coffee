@@ -119,7 +119,7 @@ client.on "connected", (socket) ->
 docker.on "logs", (data) ->
 	return unless data # The logsparser currently returns undefined if it can't parse the logs... meh
 
-	state.sendAppState() if data.action?.type is "container"
+	state.throttledSendAppState() if data.action?.type is "container"
 	state.publishLog data
 
 debug "Connecting to mqtt at #{config.mqtt.host}:#{config.mqtt.port}"
