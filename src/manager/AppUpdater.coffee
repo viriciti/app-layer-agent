@@ -28,10 +28,8 @@ module.exports = (docker, state) ->
 
 		deviceGroups = _(state.getGroups()).values()
 
-		groups = _(groups).reduce (memo, apps, label) ->
-			if _(deviceGroups).contains label
-				memo[label] = apps
-
+		groups = _(groups).reduce (memo, apps, name) ->
+			memo[name] = apps if _(deviceGroups).contains name
 			memo
 		, {}
 
@@ -184,9 +182,10 @@ module.exports = (docker, state) ->
 
 				docker.startContainer id: containerInfo.name, next
 		], (error, result) ->
-				return cb error if error
-				log.info "Application #{containerInfo.name} installed correctly!"
-				cb()
+			return cb error if error
+
+			log.info "Application #{containerInfo.name} installed correctly!"
+			cb()
 
 
 	return {

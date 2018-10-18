@@ -1,5 +1,3 @@
-debug = (require "debug") "app:actions:images"
-
 log = (require "../lib/Logger") "images actions"
 
 module.exports = (docker, state) ->

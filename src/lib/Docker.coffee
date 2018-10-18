@@ -199,8 +199,9 @@ class Docker extends EventEmitter
 					Then, only the first one is needed without the slash.
 				###
 				@getContainerByName container.Names[0].replace("/",""), (err, container) ->
-					return next() if not container
+					return next() unless container
 					return next error if error
+
 					next null, container
 			, (error, formattedContainers) ->
 				return cb error if error
@@ -209,9 +210,10 @@ class Docker extends EventEmitter
 
 
 	listContainersNames: (cb) =>
-		@dockerClient.listContainers all:true, (error, containers) =>
+		@dockerClient.listContainers all:true, (error, containers) ->
 			return cb error if error
-			async.map containers, (container, next) =>
+
+			async.map containers, (container, next) ->
 				next null, container.Names[0].replace "/", ""
 			, (error, containers) ->
 				cb error, _(containers).compact()
@@ -309,8 +311,6 @@ class Docker extends EventEmitter
 				cb error
 
 	getContainerLogs: ({ id, numOfLogs }, cb) ->
-		buffer = []
-
 		log.info "Getting `#{numOfLogs}` logs for `#{id}`"
 
 		if not numOfLogs or numOfLogs > 100
@@ -323,7 +323,7 @@ class Docker extends EventEmitter
 			tail:   numOfLogs
 			follow: false
 
-		container.logs logsOpts, (error, logs) =>
+		container.logs logsOpts, (error, logs) ->
 			if error
 				log.error "Error retrieving container logs for `#{id}`"
 				return cb error

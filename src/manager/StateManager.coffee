@@ -1,8 +1,7 @@
-_        = require "underscore"
-async    = require "async"
-debug    = (require "debug") "app:state-manager"
-fs       = require "fs"
-os       = require "os"
+_     = require "underscore"
+async = require "async"
+debug = (require "debug") "app:state-manager"
+fs    = require "fs"
 
 getIpAddresses = require "../helpers/get_ipaddresses"
 log            = (require "../lib/Logger") "StateManager"
@@ -54,7 +53,7 @@ module.exports = (config, getSocket, docker) ->
 
 				cb? error
 
-	throttledSendState = _.throttle (-> _sendStateToMqtt()), config.state.sendStateThrottleTime
+	throttledSendState = _.throttle (-> _sendStateToMqtt()), config.sendStateThrottleTime
 
 	notifyOnlineStatus = () ->
 		log.info "Setting status: online"
@@ -95,7 +94,7 @@ module.exports = (config, getSocket, docker) ->
 
 			log.warn "#{key}: Buffer.byteLength = #{byteLength}!" if byteLength > 1024
 
-			throttledCustomPublishes[key] or= _.throttle customPublish, config.state.sendStateThrottleTime
+			throttledCustomPublishes[key] or= _.throttle customPublish, config.sendStateThrottleTime
 
 			throttledCustomPublishes[key]
 				topic: "devices/#{clientId}/nsState/#{key}"
@@ -123,7 +122,7 @@ module.exports = (config, getSocket, docker) ->
 				return log.error "Error publishing app state: #{error.message}" if error
 
 				debug "App state published"
-	, config.state.sendAppStateThrottleTime
+	, config.sendAppStateThrottleTime
 
 	sendNsState = ->
 		async.eachOf nsState, (val, key, cb) ->
@@ -174,13 +173,6 @@ module.exports = (config, getSocket, docker) ->
 	getGlobalGroups = ->
 		localState.globalGroups
 
-	_getOSVersion = (cb) ->
-		fs.readFile config.version.path, (error, version) ->
-			return cb new Error "Error reading version file: #{error.message}" if error
-			return cb new Error "Version is undefined" unless version
-
-			cb null, version.toString().trim()
-
 	updateFinishedQueueList = (finishedTask) ->
 		oldList = nsState["finishedQueueList"] or []
 
@@ -195,27 +187,23 @@ module.exports = (config, getSocket, docker) ->
 			images:     docker.listImages
 			containers: docker.listContainers
 			systemInfo: docker.getDockerInfo
-			osVersion:  _getOSVersion
-
-		, (error, { images, containers, systemInfo, osVersion }) ->
+		, (error, { images, containers, systemInfo }) ->
 			if error
 				log.error "Error generating state object: #{error.message}"
 				return cb error
 
-			state = {}
-			systemInfo = _.extend systemInfo, getIpAddresses()
-			systemInfo = _.extend systemInfo, { osVersion }, { dmVersion: (require config.package.path).version }
+			groups     = _(getGroups()).values()
+			systemInfo = _.extend {},
+				systemInfo
+				getIpAddresses()
+				dmVersion: (require config.package.path).version
 
-			groups = _(getGroups()).values()
-			uptime = Math.floor(os.uptime() / 3600)
-
-			state = _.extend {}, state,
-				{ groups },
-				{ systemInfo },
-				{ images },
-				{ containers },
-				{ deviceId: clientId },
-				{ uptime }
+			state = _.extend {},
+				{ groups }
+				{ systemInfo }
+				{ images }
+				{ containers }
+				{ deviceId: clientId }
 
 			cb null, state
 

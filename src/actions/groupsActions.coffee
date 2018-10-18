@@ -1,8 +1,6 @@
 _      = require "underscore"
-async  = require "async"
 config = require "config"
 debug  = (require "debug") "app:actions:groups"
-fs     = require "fs"
 
 log = (require "../lib/Logger") "groups actions"
 
@@ -19,12 +17,12 @@ module.exports = (state, appUpdater) ->
 			log.warn "Group #{label} already there. Skipping groups creation..."
 			return cb()
 
-		newGroup = {}
+		newGroup                       = {}
 		newGroup[++currentGroupsIndex] = label
 
 		state.setGroups _.extend {}, currentGroups, newGroup
 
-		cb null, "Added group #{JSON.stringify labels}. Queueing update..."
+		cb null, "Added group #{label}. Queueing update..."
 
 		appUpdater.queueUpdate state.getGlobalGroups(), state.getGroups(), (error) ->
 			if error
@@ -44,8 +42,8 @@ module.exports = (state, appUpdater) ->
 					log.warn "Group test is already present. Skipping..."
 					return groups
 
-				group = {}
-				currentGroupsIndex = currentGroupsIndex + 1
+				group                     = {}
+				currentGroupsIndex        = currentGroupsIndex + 1
 				group[currentGroupsIndex] = label
 				_(groups).extend groups, group
 			, {}

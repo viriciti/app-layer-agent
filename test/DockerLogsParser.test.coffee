@@ -30,7 +30,7 @@ setup = ->
 	return parser
 
 
-test 'parse logs coming from handling an image', (assert)->
+test 'parse logs coming from handling an image', (assert) ->
 	parser = setup()
 
 	tests = [
@@ -44,7 +44,14 @@ test 'parse logs coming from handling an image', (assert)->
 					Type: 'image'
 					Action: 'pull'
 					time: 1486389676
-				expected: { message: 'Pulled image hello-world:latest', time: 1486389676 * 1000, type: "info" }
+				expected:
+					message: 'Pulled image hello-world'
+					type:    "info"
+					time:    1486389676 * 1000
+					action:
+						action: "pull"
+						name:   "hello-world"
+						type:   "image"
 			},
 
 			{
@@ -57,7 +64,14 @@ test 'parse logs coming from handling an image', (assert)->
 					Type: 'image',
 					Action: 'untag',
 					time: 1486390186
-				expected: { message: 'An image has been untagged', time: 1486390186 * 1000, type: "info" }
+				expected:
+					message: 'An image has been untagged'
+					type:    "info"
+					time:    1486390186 * 1000
+					action:
+						action: "untag"
+						name:   "sha256:48b5124b2768d2b917edcb640435044a97967015485e812545546cbed5cf0233"
+						type:   "image"
 			},
 
 			{
@@ -70,7 +84,14 @@ test 'parse logs coming from handling an image', (assert)->
 					Type: 'image'
 					Action: 'tag'
 					time: 1486390644
-				expected: { message: 'Tagged image alpine with tag 3.9.8', time: 1486390644 * 1000, type: "info"}
+				expected:
+					message: 'Image tagged: alpine:3.9.8'
+					type:    "info"
+					time:    1486390644 * 1000
+					action:
+						action: "tag"
+						name:   "alpine:3.9.8"
+						type:   "image"
 			},
 
 			{
@@ -83,14 +104,21 @@ test 'parse logs coming from handling an image', (assert)->
 					Type: 'image'
 					Action: 'delete'
 					time: 1486390930
-				expected: { message: 'An image has been removed', time: 1486390930 * 1000, type: "info"}
+				expected:
+					message: 'An image has been removed'
+					time: 1486390930 * 1000
+					type: "info"
+					action:
+						action: "delete"
+						name:   "sha256:48b5124b2768d2b917edcb640435044a97967015485e812545546cbed5cf0233"
+						type:   "image"
 			}
 	]
 
-	tests.forEach (test) ->
-		parsedMessage = parser.parseLogs test.toTest
-		assert.deepEqual parsedMessage, test.expected,
-			"should parse the logs and return a meaningful message when Actions is #{test.testType}"
+	tests.forEach (t) ->
+		parsedMessage = parser.parseLogs t.toTest
+		assert.deepEqual parsedMessage, t.expected,
+			"should parse the logs and return a meaningful message when Actions is #{t.testType}"
 
 	assert.end()
 
@@ -111,7 +139,14 @@ test 'parse logs coming from handling a container', (assert) ->
 				Type: 'container'
 				Action: 'destroy'
 				time: 1486397270
-			expected: { message: 'A container has been destroyed', time: 1486397270  * 1000, type: "info"}
+			expected:
+				message: 'A container has been destroyed',
+				type: "info"
+				time: 1486397270  * 1000,
+				action:
+					action: "destroy"
+					name:   "kickass_hawking"
+					type:   "container"
 		},
 
 		{
@@ -124,7 +159,14 @@ test 'parse logs coming from handling a container', (assert) ->
 				Type: 'container'
 				Action: 'create'
 				time: 1486397561
-			expected: { message: 'Created container test from image redis', time: 1486397561 * 1000, type: "info" }
+			expected:
+				message: 'Created container test from redis'
+				time: 1486397561 * 1000
+				type: "info"
+				action:
+					action: "create"
+					name:   "test"
+					type:   "container"
 		},
 
 		{
@@ -137,7 +179,14 @@ test 'parse logs coming from handling a container', (assert) ->
 				Type: 'container'
 				Action: 'start'
 				time: 1486397561
-			expected: { message: 'Started container test', time: 1486397561 * 1000, type: "info" }
+			expected:
+				message: 'Container test started'
+				time: 1486397561 * 1000
+				type: "info"
+				action:
+					action: "start"
+					name:   "test"
+					type:   "container"
 		},
 
 		{
@@ -150,13 +199,20 @@ test 'parse logs coming from handling a container', (assert) ->
 				Type: 'container'
 				Action: 'stop'
 				time: 1486397980
-			expected: { message: 'Stopped container test', time: 1486397980 * 1000, type: "info" }
+			expected:
+				message: 'Container test stopped'
+				time: 1486397980 * 1000
+				type: "info"
+				action:
+					action: "stop"
+					name:   "test"
+					type:   "container"
 		}
 	]
 
-	tests.forEach (test) ->
-		parsedMessage = parser.parseLogs test.toTest
-		assert.deepEqual parsedMessage, test.expected,
-			"should parse the logs and return a meaningful message when Actions is #{test.testType}"
+	tests.forEach (t) ->
+		parsedMessage = parser.parseLogs t.toTest
+		assert.deepEqual parsedMessage, t.expected,
+			"should parse the logs and return a meaningful message when Actions is #{t.testType}"
 
 	assert.end()

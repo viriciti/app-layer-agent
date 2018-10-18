@@ -2,7 +2,6 @@
 	# fullStack: true
 	# debugSockets: true
 
-_     = require "underscore"
 async = require "async"
 test  = require "tape"
 

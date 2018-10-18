@@ -58,7 +58,7 @@ class DockerLogsParser
 	_handleStartContainerLogs: (logs) ->
 		@generateMessage
 			raw:     logs
-			message: "Started container {name}"
+			message: "Container {name} started"
 
 	_handleCreateContainerLogs: (logs) ->
 		@generateMessage
