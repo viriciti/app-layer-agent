@@ -5,27 +5,24 @@ module.exports =
 	host: os.hostname()
 
 	mqtt:
-		host: "localhost"
-		port: 1883
-		clientId: os.hostname()
+		host:     process.env.MQTT_ENDPOINT or "localhost"
+		port:     process.env.MQTT_PORT     or 1883
+		clientId: process.env.MQTT_CLIENTID or os.hostname()
+		tls:
+			key:  "/certs/client.key"
+			cert: "/certs/client.crt"
+			ca:   "/certs/ca.crt"
 		extraOpts:
-			keepalive: 60
+			keepalive:          60
+			reconnectPeriod:    5000
 			rejectUnauthorized: true
-			reconnectPeriod: 5000
-
-	devicemqtt:
-		queueTimeout: 5000 # never touch it
 
 	groups:
-		path: "/groups"
+		path:      path.join os.homedir(), ".groups"
 		mqttTopic: "global/collections/groups"
-		whiteList: ["device-manager", "dev"]
-
-	version:
-		path: "/version"
 
 	package:
-		path: path.resolve "#{__dirname}/../package.json"
+		path: path.resolve "package.json"
 
 	state:
 		sendStateThrottleTime:    10000
@@ -38,6 +35,7 @@ module.exports =
 		socketPath: "/var/run/docker.sock"
 		maxRetries: 5
 		registry_auth:
-			required: false
-
-	development: false
+			credentials:
+				username:      process.env.GITLAB_USER_NAME
+				password:      process.env.GITLAB_USER_ACCESS_TOKEN
+				serveraddress: "https://index.docker.io/v1"

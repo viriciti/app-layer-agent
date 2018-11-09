@@ -13,7 +13,7 @@ S                = require "string"
 {
 	filterUntaggedImages,
 	getRemovableImages
-} = require "@tn-group/app-layer-logic"
+} = require "@viriciti/app-layer-logic"
 
 log                                          = (require "./Logger") "Docker"
 DockerLogsParser                             = require "./DockerLogsParser"
@@ -68,7 +68,7 @@ class Docker extends EventEmitter
 			return cb new Error "Unable to fix docker layer: too many retries"
 
 		credentials = null
-		credentials = @registry_auth.credentials if @registry_auth.required
+		credentials = @registry_auth.credentials if _.every @registry_auth.credentials
 
 		@dockerClient.pull name, { authconfig: credentials }, (error, stream) =>
 			if error

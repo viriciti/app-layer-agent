@@ -140,7 +140,7 @@ module.exports = (config, getSocket, docker) ->
 
 	# These are the groups for this particular device. They are persisted to disk and used/set when necessary
 	getGroups = ->
-		debug "Get groups"
+		debug "Get groups from file #{config.groups.path}"
 
 		if not fs.existsSync config.groups.path
 			setGroups 1: "default"

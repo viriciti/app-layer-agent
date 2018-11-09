@@ -70,8 +70,10 @@ client.on "connected", (socket) ->
 						log.error "An error occurred sending the message: #{error.message}" if error
 
 						# TODO give actions some sort of meta so we can act accordingly when they error/succeed
-						return cb() if action is "getContainerLogs"
-						return cb() if action is "refreshState"
+						return cb() if action in [
+							"getContainerLogs"
+							"refreshState"
+						]
 
 						debug "Action `#{action}` kicking state"
 						# TODO No remove...

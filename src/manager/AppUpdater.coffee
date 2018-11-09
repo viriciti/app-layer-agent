@@ -1,7 +1,7 @@
 _                                      = require "underscore"
 async                                  = require "async"
 debug                                  = (require "debug") "app:app-updater"
-{ createGroupsMixin, getAppsToChange } = require "@tn-group/app-layer-logic"
+{ createGroupsMixin, getAppsToChange } = require "@viriciti/app-layer-logic"
 
 log                                    = (require "../lib/Logger") "App Updater"
 
@@ -18,7 +18,7 @@ module.exports = (docker, state) ->
 		debug "Incoming collection", label
 
 		# guard: only handle groups
-		return debug "Imcoming collection is not groups"      if label isnt "groups"
+		return debug "Imcoming collection is not groups" if label isnt "groups"
 
 		# guard: collection may not be falsy
 		return log.error "Incoming collection is", collection if _.isEmpty collection
@@ -76,7 +76,7 @@ module.exports = (docker, state) ->
 				next null, appsToChange
 
 			(appsToChange, next) ->
-				return setImmediate next unless appsToChange.install.length and appsToChange.remove.length
+				return setImmediate next unless appsToChange.install.length or appsToChange.remove.length
 
 				state.publishNamespacedState
 					updateState:
