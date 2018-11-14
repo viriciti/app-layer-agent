@@ -4,7 +4,7 @@ _    = require "underscore"
 {
 	filterUntaggedImages,
 	getRemovableImages
-} = require "@tn-group/app-layer-logic"
+} = require "@viriciti/app-layer-logic"
 
 Docker = require "../src/lib/Docker"
 
