@@ -1,23 +1,5 @@
-# (require 'leaked-handles').set {
-# 	fullStack: true
-# 	timeout: 30000
-# 	debugSockets: true
-# }
-
 test             = require 'tape'
 DockerLogsParser = require '../src/lib/DockerLogsParser'
-
-### Testing template
-
-test 'What component aspect are you testing?', (assert) ->
-	actual = 'What is the actual output?'
-	expected = 'What is the expected output?'
-
-	assert.equal actual, expected, 'What should the feature do?'
-
-	assert.end()
-
-###############################################################
 
 setup = ->
 	docker = {}

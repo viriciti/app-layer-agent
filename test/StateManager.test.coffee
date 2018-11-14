@@ -1,7 +1,3 @@
-# require("leaked-handles").set
-	# fullStack: true
-	# debugSockets: true
-
 async = require "async"
 test  = require "tape"
 
