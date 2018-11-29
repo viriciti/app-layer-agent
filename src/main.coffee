@@ -13,8 +13,8 @@ mqttSocket    = null
 getMqttSocket = -> mqttSocket
 
 lastWill =
-	topic   : "devices/#{config.host}/status"
-	payload : "offline"
+	topic:   "devices/#{config.host}/status"
+	payload: "offline"
 
 queue = async.queue (task, cb) ->
 	log.info "Executing action: `#{task.name}`"

@@ -3,6 +3,8 @@ os = require "os"
 module.exports = ->
 	ifaces = os.networkInterfaces()
 
+	console.log ifaces
+
 	eth0IP  = ifaces.eth0?[0].address  or null
 	tun0IP  = ifaces.tun0?[0].address  or null
 	wlan0IP = ifaces.wwan0?[0].address or null

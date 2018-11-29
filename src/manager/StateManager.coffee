@@ -4,7 +4,7 @@ debug = (require "debug") "app:state-manager"
 fs    = require "fs"
 path  = require "path"
 
-getIpAddresses = require "../helpers/get_ipaddresses"
+getIpAddresses = require "../helpers/getIPAddresses"
 log            = (require "../lib/Logger") "StateManager"
 
 module.exports = (config, getSocket, docker) ->
