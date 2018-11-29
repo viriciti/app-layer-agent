@@ -1,4 +1,4 @@
-_     = require "underscore"
+_     = require "lodash"
 async = require "async"
 debug = (require "debug") "app:state-manager"
 fs    = require "fs"

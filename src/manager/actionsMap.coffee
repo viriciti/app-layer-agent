@@ -1,4 +1,4 @@
-_     = require "underscore"
+_     = require "lodash"
 debug = (require "debug") "app:actionsMap"
 {
 	containersActions

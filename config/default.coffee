@@ -7,7 +7,7 @@ module.exports =
 	mqtt:
 		host:     process.env.MQTT_ENDPOINT or "localhost"
 		port:     process.env.MQTT_PORT     or 1883
-		clientId: process.env.MQTT_CLIENTID or os.hostname()
+		clientId: os.hostname()
 		tls:
 			key:  process.env.TLS_KEY
 			cert: process.env.TLS_CERT
