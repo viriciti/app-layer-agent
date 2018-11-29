@@ -4,7 +4,7 @@
   "scripts": {
     "start": "nodemon src/main.coffee",
     "develop": "NODE_ENV=dev nodemon src/main.coffee",
-    "test": "coffeetape test/*.test.coffee | tap-summary",
+    "test": "./bin/coffeetape test/*.test.coffee | tap-summary",
     "build": "coffee --output build --compile src"
   },
   "repository": {
@@ -14,7 +14,6 @@
   "license": "GPL-3.0",
   "devDependencies": {
     "coffeescope2": "^0.5.1",
-    "coffeetape": "^1.0.1",
     "gulp": "^3.9.1",
     "gulp-shell": "^0.6.5",
     "leaked-handles": "^5.2.0",
