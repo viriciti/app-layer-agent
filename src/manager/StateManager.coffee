@@ -2,6 +2,7 @@ _     = require "underscore"
 async = require "async"
 debug = (require "debug") "app:state-manager"
 fs    = require "fs"
+path  = require "path"
 
 getIpAddresses = require "../helpers/get_ipaddresses"
 log            = (require "../lib/Logger") "StateManager"
@@ -196,7 +197,7 @@ module.exports = (config, getSocket, docker) ->
 			systemInfo = _.extend {},
 				systemInfo
 				getIpAddresses()
-				dmVersion: (require config.package.path).version
+				dmVersion: (require path.resolve "package.json").version
 
 			state = _.extend {},
 				{ groups }

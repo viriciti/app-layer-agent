@@ -1,9 +1,8 @@
-_                                      = require "underscore"
+{ isEmpty, pickBy, size, debounce }    = require "lodash"
 async                                  = require "async"
-debug                                  = (require "debug") "app:app-updater"
+debug                                  = (require "debug") "app:AppUpdater"
 { createGroupsMixin, getAppsToChange } = require "@viriciti/app-layer-logic"
-
-log                                    = (require "../lib/Logger") "App Updater"
+log                                    = (require "../lib/Logger") "AppUpdater"
 
 module.exports = (docker, state) ->
 	# We immediately set the update state to idle. At this point the socket is not connected and the publish will fail
@@ -14,33 +13,28 @@ module.exports = (docker, state) ->
 	queue = async.queue ({ func, meta }, cb) ->
 		func cb
 
-	_handleCollection = (label, collection) ->
+	handleCollection = debounce (label, groups) ->
 		debug "Incoming collection", label
 
 		# guard: only handle groups
-		return debug "Imcoming collection is not groups" if label isnt "groups"
+		return log.error "App Layer Agent is only capable of handling groups collection" unless label is "groups"
 
 		# guard: collection may not be falsy
-		return log.error "Incoming collection is", collection if _.isEmpty collection
+		return log.error "Groups are empty" if isEmpty groups
 
-		groups = collection
 		state.setGlobalGroups groups
 
-		deviceGroups = _(state.getGroups()).values()
-
-		groups = _(groups).reduce (memo, apps, name) ->
-			memo[name] = apps if _(deviceGroups).contains name
-			memo
-		, {}
+		groupNames = Object.values state.getGroups()
+		groups     = pickBy groups, (_, name) -> name in groupNames
 
 		queueUpdate groups, state.getGroups(), (error, result) ->
 			return log.error error.message if error
 			log.info "Device updated correctly!"
-
-	debouncedHandleCollection = _.debounce _handleCollection, 2000
+	, 2000
 
 	queueUpdate = (globalGroups, deviceGroups, cb) ->
 		log.info "Pushing update task in queue"
+
 		queue.push
 			func: (cb) ->
 				update globalGroups, deviceGroups, cb
@@ -53,30 +47,35 @@ module.exports = (docker, state) ->
 		debug "Global groups are", globalGroups
 		debug "Device groups are", deviceGroups
 
-		return cb new Error "Global groups is empty! Not proceeding." if _.isEmpty globalGroups
+		return cb new Error "No groups" if isEmpty globalGroups
 
-		if ((_(globalGroups).size() is 1) and not _(globalGroups).has "default")
+		if size(globalGroups) is 1 and not globalGroups["default"]
 			return cb new Error "Size of global groups is 1, but the group is not default.
 				Global groups are misconfigured!"
 
 		async.waterfall [
-			(cb) ->
+			(next) ->
 				docker.listContainers (error, containers) ->
-					return cb error if error
-					# Convert array into hashmap keyed on container name
-					cb null, _.object _.pluck(containers, "name"), containers
+					return next error if error
+
+					next null, containers.reduce (keyedContainers, container) ->
+						{ keyedContainers..., [container.name]: container }
+					, {}
 
 			(currentApps, next) ->
-				debug "Current applications are #{JSON.stringify _.keys currentApps}"
-
 				extendedGroups = createGroupsMixin globalGroups,   deviceGroups
-				debug "Mixin applications are   #{JSON.stringify _.keys extendedGroups}"
 				appsToChange   = getAppsToChange   extendedGroups, currentApps
+
+				debug "Current applications are    #{JSON.stringify Object.keys currentApps}"
+				debug "Calculated applications are #{JSON.stringify Object.keys extendedGroups}"
 
 				next null, appsToChange
 
 			(appsToChange, next) ->
-				return setImmediate next unless appsToChange.install.length or appsToChange.remove.length
+				return setImmediate next unless (
+					appsToChange.install.length or
+					appsToChange.remove.length
+				)
 
 				state.publishNamespacedState
 					updateState:
@@ -91,16 +90,17 @@ module.exports = (docker, state) ->
 						docker.removeUntaggedImages cb
 
 					(cb) ->
-						log.info "No apps to be removed." if _(appsToChange.remove).isEmpty()
+						log.info "No apps to be removed" if isEmpty appsToChange.remove
+
 						_removeApps appsToChange.remove, cb
 
 					(cb) ->
-						log.info "No apps to be installed." if _(appsToChange.install).isEmpty()
+						log.info "No apps to be installed" if isEmpty appsToChange.install
+
 						_installApps appsToChange.install, cb
 
 					(cb) ->
 						docker.removeOldImages cb
-
 				], next
 
 		], (error) ->
@@ -191,5 +191,5 @@ module.exports = (docker, state) ->
 	return {
 		update
 		queueUpdate
-		debouncedHandleCollection
+		handleCollection
 	}

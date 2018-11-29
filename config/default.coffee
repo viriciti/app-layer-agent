@@ -9,20 +9,16 @@ module.exports =
 		port:     process.env.MQTT_PORT     or 1883
 		clientId: process.env.MQTT_CLIENTID or os.hostname()
 		tls:
-			key:  "/certs/client.key"
-			cert: "/certs/client.crt"
-			ca:   "/certs/ca.crt"
+			key:  process.env.TLS_KEY
+			cert: process.env.TLS_CERT
+			ca:   process.env.TLS_CA
 		extraOpts:
 			keepalive:          60
 			reconnectPeriod:    5000
 			rejectUnauthorized: true
 
 	groups:
-		path:      path.join os.homedir(), ".groups"
-		mqttTopic: "global/collections/groups"
-
-	package:
-		path: path.resolve "package.json"
+		path: path.join os.homedir(), ".groups"
 
 	state:
 		sendStateThrottleTime:    10000

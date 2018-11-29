@@ -29,17 +29,17 @@
   "dependencies": {
     "@viriciti/app-layer-logic": "^1.2.3",
     "async": "^2.6.0",
-    "coffee-script": "^1.12.7",
+    "coffeescript": "^2.3.2",
     "config": "^1.30.0",
     "debug": "^3.1.0",
     "device-mqtt": "^1.0.10",
     "dockerode": "^2.5.5",
     "jsonstream2": "^1.1.1",
+    "lodash": "^4.17.11",
     "moment": "^2.22.1",
     "pump": "^3.0.0",
     "semver": "^5.5.0",
     "string": "^3.3.3",
-    "underscore": "^1.9.0",
     "winston": "^2.4.2"
   }
 }

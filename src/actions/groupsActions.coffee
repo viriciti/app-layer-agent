@@ -1,4 +1,4 @@
-_      = require "underscore"
+_      = require "lodash"
 config = require "config"
 debug  = (require "debug") "app:actions:groups"
 
@@ -13,13 +13,14 @@ module.exports = (state, appUpdater) ->
 
 		debug "Current groups: #{JSON.stringify currentGroups}, index #{currentGroupsIndex}"
 
-		if _.contains _(currentGroups).values(), label
+		if label in Object.values currentGroups
 			log.warn "Group #{label} already there. Skipping groups creation..."
 			return cb()
 
 		newGroup                       = {}
 		newGroup[++currentGroupsIndex] = label
 
+		console.log state.getGroups()
 		state.setGroups _.extend {}, currentGroups, newGroup
 
 		cb null, "Added group #{label}. Queueing update..."
@@ -37,7 +38,7 @@ module.exports = (state, appUpdater) ->
 		debug "Current groups: #{JSON.stringify currentGroups}, index #{currentGroupsIndex}"
 
 		newGroups =
-			_(labels).reduce (groups, label, index) ->
+			_.reduce labels, (groups, label, index) ->
 				if _.contains _(currentGroups).values(), label
 					log.warn "Group test is already present. Skipping..."
 					return groups

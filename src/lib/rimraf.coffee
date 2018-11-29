@@ -1,9 +1,6 @@
 { exec } = require "child_process"
 
-rimraf = (file, cb) ->
-	cb new Error "Missing file" unless file.length
+module.exports = (file, cb) ->
+	return cb new Error "Missing file" unless file.length
 
-	exec "rm -rf #{file}", (err, stdout, stderr) ->
-		cb err
-
-module.exports = rimraf
+	exec "rm -rf #{file}", cb

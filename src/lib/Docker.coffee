@@ -1,14 +1,14 @@
-_                = require "underscore"
-{ EventEmitter } = require "events"
-config           = require "config"
-async            = require "async"
-debug            = (require "debug") "app:docker"
-Dockerode        = require "dockerode"
-jsonstream2      = require "jsonstream2"
-moment           = require "moment"
-pump             = require "pump"
-rimraf           = require "../lib/rimraf"
-S                = require "string"
+{ EventEmitter }            = require "events"
+config                      = require "config"
+async                       = require "async"
+debug                       = (require "debug") "app:Docker"
+Dockerode                   = require "dockerode"
+jsonstream2                 = require "jsonstream2"
+moment                      = require "moment"
+pump                        = require "pump"
+rimraf                      = require "../lib/rimraf"
+S                           = require "string"
+{ every, isEmpty, compact } = require "lodash"
 
 {
 	filterUntaggedImages,
@@ -21,6 +21,8 @@ LayerFixer                                   = require "./LayerFixer"
 
 class Docker extends EventEmitter
 	constructor: ({ @socketPath, @maxRetries, @registry_auth }) ->
+		super()
+
 		@dockerClient = new Dockerode socketPath: @socketPath, maxRetries: @maxRetries
 		@logsParser   = new DockerLogsParser @
 
@@ -68,7 +70,7 @@ class Docker extends EventEmitter
 			return cb new Error "Unable to fix docker layer: too many retries"
 
 		credentials = null
-		credentials = @registry_auth.credentials if _.every @registry_auth.credentials
+		credentials = @registry_auth.credentials if every @registry_auth.credentials
 
 		@dockerClient.pull name, { authconfig: credentials }, (error, stream) =>
 			if error
@@ -104,13 +106,13 @@ class Docker extends EventEmitter
 					@pullImage { name }, cb, pullRetries + 1
 
 	listImages: (cb) =>
-		debug "Listing images"
+		debug "Listing images ..."
 		@dockerClient.listImages (error, images) =>
 			if error
 				log.error "Error listing images: #{error.message}"
 				return cb error
 
-			images = _.filter images, (image) ->
+			images = images.filter (image) ->
 				(image.RepoTags isnt null) and (image.RepoTags[0] isnt "<none>:<none>")
 
 			debug "Images are", images
@@ -141,18 +143,21 @@ class Docker extends EventEmitter
 			(toRemove, cb) =>
 				async.eachSeries toRemove, (image, cb) =>
 					@removeImage
-						name:   image
+						name: image
 					, cb
 				, cb
 		], cb
 
 	removeUntaggedImages: (cb) ->
 		log.info "Removing untagged images"
+
 		async.waterfall [
-			(cb) => @dockerClient.listImages cb
+			(cb) =>
+				@dockerClient.listImages cb
 			(allImages, cb) =>
 				untaggedImages = filterUntaggedImages allImages
 				log.info "Found #{untaggedImages.length} untagged images"
+
 				async.eachSeries untaggedImages, (image, cb) =>
 					@removeImage { id: image.Id, gentle: true }, cb
 				, cb
@@ -160,63 +165,68 @@ class Docker extends EventEmitter
 
 	getImageByName: (name, cb) ->
 		debug "Get image by name", name
-		image = @dockerClient.getImage name
-		image.inspect (error, info) ->
-			return cb error if error
-			cb null, {
-				id:          info.Id,
-				name:        name,
-				tags:        info.RepoTags,
-				size:        info.Size,
-				virtualSize: info.VirtualSize
-			}
+
+		@dockerClient
+			.getImage name
+			.inspect (error, info) ->
+				return cb error if error
+
+				cb null, {
+					id:          info.Id,
+					name:        name,
+					tags:        info.RepoTags,
+					size:        info.Size,
+					virtualSize: info.VirtualSize
+				}
 
 	removeImage: ({ name, id, force }, cb) ->
-		entity = id or name
+		entity   = id
+		entity or= name
+
 		log.info "Removing image #{entity}, forced: #{!!force}"
-		image = @dockerClient.getImage entity
-		image.remove { force }, (error) ->
-			if error
-				errorMsg = error.message or error.json?.message
-				if not force
-					msg = "#{entity} not removed: #{errorMsg}. Continuing..."
-					log.warn msg
-					return cb null, msg
 
-				log.error "Error removing image: #{errorMsg}"
-				return cb error
+		@dockerClient
+			.getImage entity
+			.remove { force }, (error) ->
+				if error
+					errorMsg = error.message or error.json?.message
+					if not force
+						msg = "#{entity} not removed: #{errorMsg}. Continuing..."
+						log.warn msg
+						return cb null, msg
 
-			log.info "Removed image #{entity} successfully"
-			cb null, "Image #{entity} removed correctly"
+					log.error "Error removing image: #{errorMsg}"
+					return cb error
+
+				log.info "Removed image #{entity} successfully"
+				cb null, "Image #{entity} removed correctly"
 
 
 	listContainers: (cb) =>
 		@dockerClient.listContainers all: true, (error, containers) =>
 			return cb error if error
+
 			async.map containers, (container, next) =>
-				###
-					container.Names is an array of names in the format "/name".
-					Then, only the first one is needed without the slash.
-				###
-				@getContainerByName container.Names[0].replace("/",""), (err, container) ->
-					return next() unless container
+				# container.Names is an array of names in the format "/name".
+				# Only the first name after the slash is needed.
+				@getContainerByName container.Names[0].replace("/", ""), (err, containerByName) ->
+					return next()     unless containerByName
 					return next error if error
 
-					next null, container
+					next null, containerByName
 			, (error, formattedContainers) ->
 				return cb error if error
-				# Compact because sometimes the array contains undefined values
-				cb null, _.compact formattedContainers
-
+				cb null, compact formattedContainers
 
 	listContainersNames: (cb) =>
-		@dockerClient.listContainers all:true, (error, containers) ->
+		@dockerClient.listContainers all: true, (error, containers) ->
 			return cb error if error
 
 			async.map containers, (container, next) ->
 				next null, container.Names[0].replace "/", ""
-			, (error, containers) ->
-				cb error, _(containers).compact()
+			, (error, names) ->
+				return cb error if error
+				cb null, compact names
 
 	getContainerByName: (name, cb) =>
 		container = @dockerClient.getContainer name
@@ -259,35 +269,42 @@ class Docker extends EventEmitter
 
 
 	createContainer: ({ containerProps }, cb) ->
-		log.info "Creating container", containerProps.name
+		log.info "Creating container #{containerProps.name} ..."
+
 		@dockerClient.createContainer containerProps, (error, created) ->
 			if error
 				log.error "Creating container `#{containerProps.name}` failed: #{error.message}"
 				return cb error
 
+			log.info "Created container #{containerProps.name}"
 			cb null, created
 
 	startContainer: ({ id }, cb) ->
-		log.info "Starting container `#{id}`"
-		container = @dockerClient.getContainer id
-		container.start (error) ->
-			if error
-				log.error "Starting container `#{id}` failed: #{error.message}"
-				return cb error
+		log.info "Starting container #{id} ..."
 
-			cb null, "Container #{id} started correctly"
+		@dockerClient
+			.getContainer id
+			.start (error) ->
+				if error
+					log.error "Starting container `#{id}` failed: #{error.message}"
+					return cb error
+
+				cb null, "Container #{id} started correctly"
 
 	restartContainer: ({ id }, cb) ->
-		log.info "Restarting container `#{id}`"
-		container = @dockerClient.getContainer id
-		container.restart (error) ->
-			if error
-				log.error "Restarting container `#{id}` failed: #{error.message}"
-				return cb error
+		log.info "Restarting container #{id} ..."
 
-			cb null, "Container #{id} restarted correctly"
+		@dockerClient
+			.getContainer id
+			.restart (error) ->
+				if error
+					log.error "Restarting container `#{id}` failed: #{error.message}"
+					return cb error
+
+				cb null, "Container #{id} restarted correctly"
 
 	removeContainer: ({ id, force = false }, cb) ->
+		return cb()
 		log.info "Removing container `#{id}`"
 
 		@listContainers (error, containers) =>
@@ -295,7 +312,7 @@ class Docker extends EventEmitter
 				log.error "Error listing containers: #{error.message}"
 				return cb error
 
-			toRemove = _.filter containers, (c) -> (S c.name).contains id
+			toRemove = containers.filter (c) -> (S c.name).contains id
 
 			async.eachSeries toRemove, (c, cb) =>
 				(@dockerClient.getContainer c.Id).remove { force }, (error) ->
@@ -335,7 +352,7 @@ class Docker extends EventEmitter
 
 			logs = logs
 				.split("\n")
-				.filter (l) -> not _.isEmpty l
+				.filter (l) -> not isEmpty l
 				.map    (l) -> l.substr 8, l.length - 1
 
 			cb null, logs
