@@ -1,13 +1,19 @@
-{ omit }   = require "lodash"
-async      = require "async"
-config     = require "config"
-debug      = (require "debug") "app:main"
-devicemqtt = require "device-mqtt"
+{ omit } = require "lodash"
+async    = require "async"
+config   = require "config"
+debug    = (require "debug") "app:main"
+mqtt     = require "mqtt"
+RPC      = require "mqtt-json-rpc"
+path     = require "path"
 
 log          = require("./lib/Logger") "main"
 Docker       = require "./lib/Docker"
 AppUpdater   = require './manager/AppUpdater'
 StateManager = require './manager/StateManager'
+
+registerContainerActions = require "./actions/registerContainerActions"
+registerGroupActions     = require "./actions/registerGroupActions"
+registerImageActions     = require "./actions/registerImageActions"
 
 mqttSocket    = null
 getMqttSocket = -> mqttSocket
@@ -30,78 +36,90 @@ log.info "Booting up manager..."
 docker      = new Docker   config.docker
 state       = StateManager config, getMqttSocket, docker
 appUpdater  = AppUpdater   docker, state
-{ execute } = require("./manager/actionsMap") docker, state, appUpdater
+# { execute } = require("./manager/actionsMap") docker, state, appUpdater
 
 options = config.mqtt
 options = omit options, "tls" if config.development
-client  = devicemqtt options
+client  = mqtt.connect options
+rpc     = new RPC client
 
 log.info "Connecting to #{if options.tls? then 'mqtts' else 'mqtt'}://#{options.host}:#{options.port} ..."
-client.on "connected", (socket) ->
+client.on "connect", (socket) ->
 	log.info "Connected to the MQTT broker"
 
-	mqttSocket = socket
+	mqttSocket    = socket
+	actionOptions =
+		appUpdater: appUpdater
+		baseMethod: path.join "actions/", options.clientId
+		docker:     docker
+		rpc:        rpc
+		state:      state
 
 	state.notifyOnlineStatus()
 	state.throttledSendState()
 	state.sendNsState()
 
-	_onAction = (action, payload, reply) ->
-		log.info "New action received: \nAction: #{action}\nPayload: #{JSON.stringify payload}"
-		debug "Action queue length: #{queue.length()}"
+	registerContainerActions actionOptions
+	registerImageActions     actionOptions
+	registerGroupActions     actionOptions
+	registerDeviceActions    actionOptions
 
-		task =
-			name: action
-			fn: (cb) ->
-				debug "Action queue length: #{queue.length()}"
-				debug "Action `#{action}` being executed"
-				execute { action, payload }, (error, result) ->
-					debug "Received an error: #{error.message}" if error
-					debug "Received result for action: #{action} - #{result}"
+	# _onAction = (action, payload, reply) ->
+	# 	log.info "New action received: \nAction: #{action}\nPayload: #{JSON.stringify payload}"
+	# 	debug "Action queue length: #{queue.length()}"
 
-					if error
-						return reply.send type: "error", data: error.message, (mqttErr, ack) ->
-							log.error "An error occurred sending the message: #{error.message}" if mqttErr
-							return cb()
+	# 	task =
+	# 		name: action
+	# 		fn: (cb) ->
+	# 			debug "Action queue length: #{queue.length()}"
+	# 			debug "Action `#{action}` being executed"
+	# 			execute { action, payload }, (error, result) ->
+	# 				debug "Received an error: #{error.message}" if error
+	# 				debug "Received result for action: #{action} - #{result}"
 
-					reply.send type: "success", data: result, (error, ack) ->
-						log.error "An error occurred sending the message: #{error.message}" if error
+	# 				if error
+	# 					return reply.send type: "error", data: error.message, (mqttErr, ack) ->
+	# 						log.error "An error occurred sending the message: #{error.message}" if mqttErr
+	# 						return cb()
 
-						# TODO give actions some sort of meta so we can act accordingly when they error/succeed
-						return cb() if action in [
-							"getContainerLogs"
-							"refreshState"
-						]
+	# 				reply.send type: "success", data: result, (error, ack) ->
+	# 					log.error "An error occurred sending the message: #{error.message}" if error
 
-						debug "Action `#{action}` kicking state"
-						# TODO No remove...
-						state.throttledSendState()
+	# 					# TODO give actions some sort of meta so we can act accordingly when they error/succeed
+	# 					return cb() if action in [
+	# 						"getContainerLogs"
+	# 						"refreshState"
+	# 					]
 
-						cb()
+	# 					debug "Action `#{action}` kicking state"
+	# 					# TODO No remove...
+	# 					state.throttledSendState()
 
-		queue.push task, (error) ->
-			debug "Action queue length: #{queue.length()}"
-			state.publishNamespacedState queue: updateTodos()
+	# 					cb()
 
-			if error
-				state.updateFinishedQueueList
-					exitState: "error"
-					message:   error.message
-					name:      task.name
-					timestamp: Date.now()
-				return log.error "Error processing action `#{action}`: #{error.message}"
+	# 	queue.push task, (error) ->
+	# 		debug "Action queue length: #{queue.length()}"
+	# 		state.publishNamespacedState queue: updateTodos()
 
-			log.info "Action #{action} completed"
-			state.updateFinishedQueueList
-				exitState: "success"
-				message:   "done"
-				name:      task.name
-				timestamp: Date.now()
+	# 		if error
+	# 			state.updateFinishedQueueList
+	# 				exitState: "error"
+	# 				message:   error.message
+	# 				name:      task.name
+	# 				timestamp: Date.now()
+	# 			return log.error "Error processing action `#{action}`: #{error.message}"
 
-		state.publishNamespacedState queue: updateTodos()
+	# 		log.info "Action #{action} completed"
+	# 		state.updateFinishedQueueList
+	# 			exitState: "success"
+	# 			message:   "done"
+	# 			name:      task.name
+	# 			timestamp: Date.now()
 
-	_onSocketError = (error) ->
-		log.error "MQTT socket error!: #{error.message}" if error
+	# 	state.publishNamespacedState queue: updateTodos()
+
+	# _onSocketError = (error) ->
+	# 	log.error "MQTT socket error!: #{error.message}" if error
 
 	socket
 		.on   "action",               _onAction
