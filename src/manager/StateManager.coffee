@@ -26,7 +26,7 @@ module.exports = (config, getSocket, docker) ->
 
 		debug "Sending data to #{opts.topic}"
 
-		socket.customPublish opts, cb
+		socket.publish opts.topic, opts.message, opts.opts, cb
 
 	_sendStateToMqtt = (cb) ->
 		log.info "Sending state.."

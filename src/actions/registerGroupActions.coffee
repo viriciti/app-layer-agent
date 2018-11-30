@@ -2,13 +2,14 @@ _     = require "lodash"
 debug = (require "debug") "app:registerGroupActions"
 path  = require "path"
 
-log = (require "../lib/Logger") "groups actions"
+log            = (require "../lib/Logger") "registerGroupActions"
+registerMethod = require "../helpers/registerMethod"
 
 removeGroupFromGroups = (groupToRemove, groups) ->
 	newGroups = _.without Object.values(groups), groupToRemove
 
-	_(newGroups).reduce (groupsObj, group, index) ->
-		groupsObj[++index] = group
+	_.reduce newGroups, (groupsObj, group, index) ->
+		groupsObj[index + 1] = group
 		groupsObj
 	, {}
 
@@ -21,7 +22,7 @@ module.exports = ({ baseMethod, rpc, state, appUpdater }) ->
 
 		newGroups =
 			_.reduce names, (groups, label, index) ->
-				if _.contains _(currentGroups).values(), label
+				if _.contains Object.values(currentGroups), label
 					log.warn "Group '#{label}' is already present. Skipping ..."
 					return groups
 
@@ -42,6 +43,5 @@ module.exports = ({ baseMethod, rpc, state, appUpdater }) ->
 		state.setGroups removeGroupFromGroups name, currentGroups
 		appUpdater.queueUpdate state.getGlobalGroups(), state.getGroups()
 
-	rpc
-		.register path.join(baseMethod, "storeGroups"), onStoreGroups
-		.register path.join(baseMethod, "removeGroup"), onRemoveGroup
+	registerMethod rpc, path.join(baseMethod, "storeGroups"), onStoreGroups
+	registerMethod rpc, path.join(baseMethod, "removeGroup"), onRemoveGroup

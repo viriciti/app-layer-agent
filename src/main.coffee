@@ -14,6 +14,7 @@ StateManager = require './manager/StateManager'
 registerContainerActions = require "./actions/registerContainerActions"
 registerGroupActions     = require "./actions/registerGroupActions"
 registerImageActions     = require "./actions/registerImageActions"
+registerDeviceActions    = require "./actions/registerDeviceActions"
 
 mqttSocket    = null
 getMqttSocket = -> mqttSocket
@@ -38,16 +39,15 @@ state       = StateManager config, getMqttSocket, docker
 appUpdater  = AppUpdater   docker, state
 # { execute } = require("./manager/actionsMap") docker, state, appUpdater
 
-options = config.mqtt
-options = omit options, "tls" if config.development
-client  = mqtt.connect options
-rpc     = new RPC client
+options    = config.mqtt
+options    = omit options, "tls" if config.development
+mqttSocket = client = mqtt.connect options
+rpc        = new RPC client
 
-log.info "Connecting to #{if options.tls? then 'mqtts' else 'mqtt'}://#{options.host}:#{options.port} ..."
+log.info "Connecting to #{if options.tls? then 'mqtts' else 'mqtt'}://#{options.host}:#{options.port} as #{options.clientId} ..."
 client.on "connect", (socket) ->
 	log.info "Connected to the MQTT broker"
 
-	mqttSocket    = socket
 	actionOptions =
 		appUpdater: appUpdater
 		baseMethod: path.join "actions/", options.clientId
@@ -55,9 +55,9 @@ client.on "connect", (socket) ->
 		rpc:        rpc
 		state:      state
 
-	state.notifyOnlineStatus()
-	state.throttledSendState()
-	state.sendNsState()
+	# state.notifyOnlineStatus()
+	# state.throttledSendState()
+	# state.sendNsState()
 
 	registerContainerActions actionOptions
 	registerImageActions     actionOptions
@@ -121,31 +121,31 @@ client.on "connect", (socket) ->
 	# _onSocketError = (error) ->
 	# 	log.error "MQTT socket error!: #{error.message}" if error
 
-	socket
-		.on   "action",               _onAction
-		.on   "error",                _onSocketError
-		.on   "global:collection",    appUpdater.handleCollection
-		.once "disconnected", (reason) ->
-			log.warn "Disconnected from MQTT"
+	# socket
+	# 	.on   "action",               _onAction
+	# 	.on   "error",                _onSocketError
+	# 	.on   "global:collection",    appUpdater.handleCollection
+	# 	.once "disconnected", (reason) ->
+	# 		log.warn "Disconnected from MQTT"
 
-			socket.removeListener "action",               _onAction
-			socket.removeListener "error",                _onSocketError
-			socket.removeListener "global:collection",    appUpdater.handleCollection
+	# 		socket.removeListener "action",               _onAction
+	# 		socket.removeListener "error",                _onSocketError
+	# 		socket.removeListener "global:collection",    appUpdater.handleCollection
 
-			# HACK:
-			throw new Error "Disconnected! Killing myself!"
+	# 		# HACK:
+	# 		throw new Error "Disconnected! Killing myself!"
 
 docker.on "logs", (data) ->
 	return unless data # The logsparser currently returns undefined if it can't parse the logs... meh
 
-	state.throttledSendAppState() if data.action?.type is "container"
-	state.publishLog data
+	# state.throttledSendAppState() if data.action?.type is "container"
+	# state.publishLog data
 
 debug "Connecting to MQTT at #{config.mqtt.host}:#{config.mqtt.port}"
-client
-	.on "error", (error) ->
-		log.error "MQTT client error occurred: #{error.message}"
-		throw error if error.message?.includes "EAI_AGAIN"
-	.on "reconnecting", (error) ->
-		log.info "Reconnecting ..."
-	.connect lastWill
+# client
+# 	.on "error", (error) ->
+# 		log.error "MQTT client error occurred: #{error.message}"
+# 		throw error if error.message?.includes "EAI_AGAIN"
+# 	.on "reconnecting", (error) ->
+# 		log.info "Reconnecting ..."
+# 	.connect lastWill

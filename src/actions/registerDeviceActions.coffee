@@ -1,11 +1,13 @@
 path  = require "path"
 debug = (require "debug") "app:registerDeviceActions"
 
+registerMethod = require "../helpers/registerMethod"
+
 module.exports = ({ baseMethod, rpc, state }) ->
-	onRefreshState = () ->
+	onRefreshState = ->
 		debug "Refreshing state ..."
 
 		state.throttledSendState()
 		state.sendNsState()
 
-	rpc.register path.join(baseMethod, "refreshState"),  onRefreshState
+	registerMethod rpc, path.join(baseMethod, "refreshState"), onRefreshState
