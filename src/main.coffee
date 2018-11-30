@@ -131,4 +131,3 @@ client
 	.on "reconnecting", (error) ->
 		log.info "Reconnecting ..."
 	.connect lastWill
-

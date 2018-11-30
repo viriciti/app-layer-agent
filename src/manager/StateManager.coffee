@@ -1,9 +1,10 @@
 _     = require "lodash"
 async = require "async"
-debug = (require "debug") "app:state-manager"
+debug = (require "debug") "app:StateManager"
 fs    = require "fs"
 path  = require "path"
 
+pkg            = require "../../package.json"
 getIpAddresses = require "../helpers/getIPAddresses"
 log            = (require "../lib/Logger") "StateManager"
 
@@ -30,15 +31,13 @@ module.exports = (config, getSocket, docker) ->
 	_sendStateToMqtt = (cb) ->
 		log.info "Sending state.."
 		_generateStateObject (error, state) ->
-			if error
-				log.error "Not sending state: #{error.message}"
-				return cb? error
+			return cb error if error
 
 			debug "State is", JSON.stringify _.omit state, ["images", "containers"]
 
 			stateStr   = JSON.stringify state
 			byteLength = Buffer.byteLength stateStr, 'utf8'
-			log.warn "Buffer.byteLength: #{byteLength}" if byteLength > 20000 # .02MB spam per 2 sec = 864MB in 24 hrs
+			log.warn "State exceeds recommended byte length: #{byteLength}/20000 bytes" if byteLength > 20000 # .02MB spam per 2 sec = 864MB in 24 hrs
 
 			customPublish
 				topic: "devices/#{clientId}/state"
@@ -83,13 +82,12 @@ module.exports = (config, getSocket, docker) ->
 	# NOTE! This function will side effect on the nsState object! : )
 	publishNamespacedState = (newState, cb) ->
 		return cb?() if _.isEmpty newState
+
 		async.eachOf newState, (val, key, cb) ->
 			currentVal = nsState[key]
-
-			return async.setImmediate cb if _.isEqual currentVal, val
+			return cb() if _.isEqual currentVal, val
 
 			nsState[key] = val
-
 			stringified  = JSON.stringify val
 			byteLength   = Buffer.byteLength stringified, 'utf8'
 
@@ -106,8 +104,7 @@ module.exports = (config, getSocket, docker) ->
 			, (error) ->
 				log.error "Error in customPublish: #{error.message}" if error
 
-			async.setImmediate cb
-
+			cb()
 		, -> cb?()
 
 	throttledSendAppState = _.throttle ->
@@ -139,25 +136,27 @@ module.exports = (config, getSocket, docker) ->
 
 	getDeviceId = -> clientId
 
-	# These are the groups for this particular device. They are persisted to disk and used/set when necessary
 	getGroups = ->
-		debug "Get groups from file #{config.groups.path}"
+		debug "Groups file: #{config.groups.path}"
 
-		if not fs.existsSync config.groups.path
-			setGroups 1: "default"
-			log.info "Created groups file with default configuration"
+		unless fs.existsSync config.groups.path
+			setDefaultGroups()
+			log.info "Groups configured with default configuration"
 
 		try
 			groups = JSON.parse (fs.readFileSync config.groups.path).toString()
 		catch error
-			log.error "Error parsing groups file #{}: #{error.message}"
-			setGroups 1: "default"
+			log.error "Error while parsing groups, setting default configuration ..."
+			setDefaultGroups()
 
 		groups = _.extend groups, 1: "default"
 
-		debug "Get groups returning: #{JSON.stringify groups}"
+		debug "Groups: #{JSON.stringify groups}"
 
 		groups
+
+	setDefaultGroups = ->
+		setGroups 1: "default"
 
 	setGroups = (groups) ->
 		groups = "#{JSON.stringify groups}\n"
@@ -176,7 +175,6 @@ module.exports = (config, getSocket, docker) ->
 
 	updateFinishedQueueList = (finishedTask) ->
 		oldList = nsState["finishedQueueList"] or []
-
 		newList = [ finishedTask ].concat oldList.slice 0, 9 # only keep 10
 
 		publishNamespacedState finishedQueueList: newList
@@ -197,7 +195,7 @@ module.exports = (config, getSocket, docker) ->
 			systemInfo = _.extend {},
 				systemInfo
 				getIpAddresses()
-				dmVersion: (require path.resolve "package.json").version
+				dmVersion: pkg.version
 
 			state = _.extend {},
 				{ groups }

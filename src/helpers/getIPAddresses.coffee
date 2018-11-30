@@ -1,13 +1,16 @@
-os = require "os"
+os         = require "os"
+{ reduce, find } = require "lodash"
 
 module.exports = ->
-	ifaces = os.networkInterfaces()
+	reduce os.networkInterfaces(), (addresses, iface, name) ->
+		# support ipv4 addresses
+		ipv4 = find iface, family: "IPv4"
+		return addresses unless ipv4
 
-	console.log ifaces
+		# ignore internal addresses
+		{ address, internal } = ipv4
+		return addresses if internal
 
-	eth0IP  = ifaces.eth0?[0].address  or null
-	tun0IP  = ifaces.tun0?[0].address  or null
-	wlan0IP = ifaces.wwan0?[0].address or null
-	ppp0IP  = ifaces.ppp0?[0].address  or null
-
-	{ eth0IP, tun0IP, wlan0IP, ppp0IP }
+		addresses[name] = address
+		addresses
+	, {}
