@@ -36,6 +36,8 @@
     "jsonstream2": "^1.1.1",
     "lodash": "^4.17.11",
     "moment": "^2.22.1",
+    "mqtt": "^2.18.8",
+    "mqtt-json-rpc": "^0.9.20",
     "pump": "^3.0.0",
     "semver": "^5.5.0",
     "string": "^3.3.3",
