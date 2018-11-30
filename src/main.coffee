@@ -39,12 +39,13 @@ state       = StateManager config, getMqttSocket, docker
 appUpdater  = AppUpdater   docker, state
 # { execute } = require("./manager/actionsMap") docker, state, appUpdater
 
-options    = config.mqtt
-options    = omit options, "tls" if config.development
-mqttSocket = client = mqtt.connect options
-rpc        = new RPC client
+options      = config.mqtt
+options      = omit options, "tls" if config.development
+mqttSocket   = client = mqtt.connect options
+rpc          = new RPC client
+mqttProtocol = if options.tls? then "mqtts" else "mqtt"
 
-log.info "Connecting to #{if options.tls? then 'mqtts' else 'mqtt'}://#{options.host}:#{options.port} as #{options.clientId} ..."
+log.info "Connecting to #{mqttProtocol}://#{options.host}:#{options.port} as #{options.clientId} ..."
 client.on "connect", (socket) ->
 	log.info "Connected to the MQTT broker"
 

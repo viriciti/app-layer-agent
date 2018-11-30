@@ -29,6 +29,7 @@ module.exports = ({ baseMethod, rpc, state, appUpdater }) ->
 				group                     = {}
 				currentGroupsIndex        = currentGroupsIndex + 1
 				group[currentGroupsIndex] = label
+
 				_(groups).extend groups, group
 			, {}
 

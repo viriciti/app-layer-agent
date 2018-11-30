@@ -1,5 +1,4 @@
-{ defaultTo } = require "lodash"
-debug         = (require "debug") "app:helpers:registerMethod"
+debug = (require "debug") "app:helpers:registerMethod"
 
 registeredMethods = []
 
@@ -12,7 +11,7 @@ module.exports = (rpc, method, fn) ->
 	rpc.register method, (...params) ->
 		debug "Executing method '#{method}' ..."
 
-		response        = await fn.apply fn, params
-		defaultResponse = ""
-
-		defaultTo response, defaultResponse
+		try
+			status: "OK", data: await fn.apply fn, params
+		catch error
+			status: "ERROR", data: error.message
