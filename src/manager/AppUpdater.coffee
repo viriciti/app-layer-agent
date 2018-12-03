@@ -66,7 +66,7 @@ class AppUpdater
 
 				message = []
 				message.push "Installing: #{map(appsToChange.install, "applicationName").join ", "}" if appsToChange.install.length
-				message.push "Removing: #{appsToChange.remove.join ", "}"                       if appsToChange.remove.length
+				message.push "Removing: #{appsToChange.remove.join ", "}"                            if appsToChange.remove.length
 
 				@state.publishNamespacedState
 					updateState:
@@ -74,8 +74,6 @@ class AppUpdater
 						long:  message.join "\n"
 
 				async.series [
-					(cb) =>
-						@docker.removeOldImages cb
 					(cb) =>
 						@docker.removeUntaggedImages cb
 					(cb) =>

@@ -6,7 +6,6 @@ Dockerode                                    = require "dockerode"
 jsonstream2                                  = require "jsonstream2"
 moment                                       = require "moment"
 pump                                         = require "pump"
-rimraf                                       = require "../lib/rimraf"
 S                                            = require "string"
 { every, isEmpty, compact }                  = require "lodash"
 { filterUntaggedImages, getRemovableImages } = require "@viriciti/app-layer-logic"
@@ -84,20 +83,10 @@ class Docker extends EventEmitter
 			pump [
 				stream
 				jsonstream2.parse()
-			], (error) =>
+			], (error) ->
 				clearInterval _pullingPingTimeout
 
-				return cb() unless error
-
-				log.error "An error occured in pull: #{error.message}"
-				return cb error unless error.conflictingDirectory
-
-				rimraf error.conflictingDirectory, (error) =>
-					if error
-						log.error "Error while removing dir '#{error.conflictingDirectory}': #{error.message}"
-						return cb error
-
-					@pullImage { name }, cb, pullRetries + 1
+				cb error
 
 	listImages: (cb) =>
 		debug "Listing images ..."
