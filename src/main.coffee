@@ -1,10 +1,7 @@
-{ omit } = require "lodash"
-async    = require "async"
-config   = require "config"
-debug    = (require "debug") "app:main"
-mqtt     = require "mqtt"
-RPC      = require "mqtt-json-rpc"
-path     = require "path"
+RPC            = require "mqtt-json-rpc"
+config         = require "config"
+mqtt           = require "mqtt"
+{ omit, last } = require "lodash"
 
 log          = require("./lib/Logger") "main"
 Docker       = require "./lib/Docker"
@@ -16,137 +13,108 @@ registerGroupActions     = require "./actions/registerGroupActions"
 registerImageActions     = require "./actions/registerImageActions"
 registerDeviceActions    = require "./actions/registerDeviceActions"
 
-mqttSocket    = null
-getMqttSocket = -> mqttSocket
-
-lastWill =
-	topic:   "devices/#{config.host}/status"
+will =
+	topic:   "devices/#{config.mqtt.clientId}/status"
 	payload: "offline"
 
-queue = async.queue (task, cb) ->
-	log.info "Executing action: `#{task.name}`"
-	task.fn cb
-
-updateTodos = ->
-	[]
-		.concat queue.workersList().map    (item) -> item.data.name
-		.concat queue._tasks.toArray().map (item) -> item.name
-
-log.info "Booting up manager..."
-
-docker      = new Docker   config.docker
-state       = StateManager config, getMqttSocket, docker
-appUpdater  = AppUpdater   docker, state
-# { execute } = require("./manager/actionsMap") docker, state, appUpdater
+log.info "Booting up manager ..."
 
 options      = config.mqtt
+options      = { ...options, will }
 options      = omit options, "tls" if config.development
-mqttSocket   = client = mqtt.connect options
-rpc          = new RPC client
-mqttProtocol = if options.tls? then "mqtts" else "mqtt"
+client       = mqtt.connect options
 
-log.info "Connecting to #{mqttProtocol}://#{options.host}:#{options.port} as #{options.clientId} ..."
-client.on "connect", (socket) ->
+rpc          = new RPC client
+docker       = new Docker config.docker
+state        = new StateManager client, docker
+appUpdater   = new AppUpdater   docker, state
+
+mqttProtocol = if options.tls? then "mqtts" else "mqtt"
+mqttUrl      = "#{mqttProtocol}://#{options.host}:#{options.port}"
+
+log.info "Connecting to #{mqttUrl} as #{options.clientId} ..."
+onConnect = ->
 	log.info "Connected to the MQTT broker"
 
 	actionOptions =
 		appUpdater: appUpdater
-		baseMethod: path.join "actions/", options.clientId
+		baseMethod: "#{config.mqtt.actions.basePath}#{options.clientId}"
 		docker:     docker
 		rpc:        rpc
 		state:      state
 
-	# state.notifyOnlineStatus()
-	# state.throttledSendState()
-	# state.sendNsState()
+	state.notifyOnlineStatus()
+	state.throttledSendState()
+	state.sendNsState()
 
 	registerContainerActions actionOptions
 	registerImageActions     actionOptions
 	registerGroupActions     actionOptions
 	registerDeviceActions    actionOptions
 
-	# _onAction = (action, payload, reply) ->
-	# 	log.info "New action received: \nAction: #{action}\nPayload: #{JSON.stringify payload}"
-	# 	debug "Action queue length: #{queue.length()}"
+	# support legacy actions (commands)
+	client.subscribe [
+		"commands/#{options.clientId}/+"
+		"global/collections/+"
+	]
 
-	# 	task =
-	# 		name: action
-	# 		fn: (cb) ->
-	# 			debug "Action queue length: #{queue.length()}"
-	# 			debug "Action `#{action}` being executed"
-	# 			execute { action, payload }, (error, result) ->
-	# 				debug "Received an error: #{error.message}" if error
-	# 				debug "Received result for action: #{action} - #{result}"
+onMessage = (topic, message) ->
+	if topic.startsWith "commands/#{options.clientId}"
+		actionId                    = last topic.split "/"
+		json                        = JSON.parse message.toString()
+		{ action, origin, payload } = json
 
-	# 				if error
-	# 					return reply.send type: "error", data: error.message, (mqttErr, ack) ->
-	# 						log.error "An error occurred sending the message: #{error.message}" if mqttErr
-	# 						return cb()
+		responseTopic = "commands/#{origin}/#{actionId}/response"
 
-	# 				reply.send type: "success", data: result, (error, ack) ->
-	# 					log.error "An error occurred sending the message: #{error.message}" if error
+		rpc
+			.call "#{config.mqtt.actions.basePath}#{options.clientId}/#{action}", payload
+			.then (result) ->
+				client.publish responseTopic, JSON.stringify
+					action:      action
+					data:        result
+					statusCode: "OK"
+			.catch (error) ->
+				log.error error.message
 
-	# 					# TODO give actions some sort of meta so we can act accordingly when they error/succeed
-	# 					return cb() if action in [
-	# 						"getContainerLogs"
-	# 						"refreshState"
-	# 					]
+				client.publish responseTopic, JSON.stringify
+					action:     action
+					data:       error
+					statusCode: "ERROR"
+	else if topic.startsWith "global/collections/"
+		appUpdater.handleCollection JSON.parse message.toString()
 
-	# 					debug "Action `#{action}` kicking state"
-	# 					# TODO No remove...
-	# 					state.throttledSendState()
+onError = (error) ->
+	log.error "Could not connect to the MQTT broker: #{error.message}"
 
-	# 					cb()
+onReconnect = ->
+	log.warn "Reconnecting to the MQTT broker ..."
 
-	# 	queue.push task, (error) ->
-	# 		debug "Action queue length: #{queue.length()}"
-	# 		state.publishNamespacedState queue: updateTodos()
+onOffline = ->
+	log.warn "Offline ..."
 
-	# 		if error
-	# 			state.updateFinishedQueueList
-	# 				exitState: "error"
-	# 				message:   error.message
-	# 				name:      task.name
-	# 				timestamp: Date.now()
-	# 			return log.error "Error processing action `#{action}`: #{error.message}"
+onClose = (reason) ->
+	console.log reason
 
-	# 		log.info "Action #{action} completed"
-	# 		state.updateFinishedQueueList
-	# 			exitState: "success"
-	# 			message:   "done"
-	# 			name:      task.name
-	# 			timestamp: Date.now()
+	client
+		.removeListener "connect",   onConnect
+		.removeListener "message",   onMessage
+		.removeListener "error",     onError
+		.removeListener "reconnect", onReconnect
+		.removeListener "offline",   onOffline
+		.removeListener "close",     onClose
 
-	# 	state.publishNamespacedState queue: updateTodos()
+	throw new Error "Lost connection to the MQTT broker at #{mqttUrl}. Restarting ..."
 
-	# _onSocketError = (error) ->
-	# 	log.error "MQTT socket error!: #{error.message}" if error
-
-	# socket
-	# 	.on   "action",               _onAction
-	# 	.on   "error",                _onSocketError
-	# 	.on   "global:collection",    appUpdater.handleCollection
-	# 	.once "disconnected", (reason) ->
-	# 		log.warn "Disconnected from MQTT"
-
-	# 		socket.removeListener "action",               _onAction
-	# 		socket.removeListener "error",                _onSocketError
-	# 		socket.removeListener "global:collection",    appUpdater.handleCollection
-
-	# 		# HACK:
-	# 		throw new Error "Disconnected! Killing myself!"
+client
+	.on "connect",   onConnect
+	.on "message",   onMessage
+	.on "error",     onError
+	.on "reconnect", onReconnect
+	.on "offline",   onOffline
+	.on "close",     onClose
 
 docker.on "logs", (data) ->
-	return unless data # The logsparser currently returns undefined if it can't parse the logs... meh
+	return unless data
 
-	# state.throttledSendAppState() if data.action?.type is "container"
-	# state.publishLog data
-
-debug "Connecting to MQTT at #{config.mqtt.host}:#{config.mqtt.port}"
-# client
-# 	.on "error", (error) ->
-# 		log.error "MQTT client error occurred: #{error.message}"
-# 		throw error if error.message?.includes "EAI_AGAIN"
-# 	.on "reconnecting", (error) ->
-# 		log.info "Reconnecting ..."
-# 	.connect lastWill
+	state.throttledSendAppState() if data.action?.type is "container"
+	state.publishLog data

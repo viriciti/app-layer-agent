@@ -2,8 +2,6 @@ os    = require "os"
 path  = require "path"
 
 module.exports =
-	host: os.hostname()
-
 	mqtt:
 		host:     process.env.MQTT_ENDPOINT or "localhost"
 		port:     process.env.MQTT_PORT     or 1883
@@ -16,6 +14,8 @@ module.exports =
 			keepalive:          60
 			reconnectPeriod:    5000
 			rejectUnauthorized: true
+		actions:
+			basePath: "actions/"
 
 	groups:
 		path: path.join os.homedir(), ".groups"

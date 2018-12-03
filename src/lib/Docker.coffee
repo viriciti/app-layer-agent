@@ -108,22 +108,15 @@ class Docker extends EventEmitter
 	listImages: (cb) =>
 		debug "Listing images ..."
 		@dockerClient.listImages (error, images) =>
-			if error
-				log.error "Error listing images: #{error.message}"
-				return cb error
+			return cb error if error
 
 			images = images.filter (image) ->
 				(image.RepoTags isnt null) and (image.RepoTags[0] isnt "<none>:<none>")
 
-			debug "Images are", images
+			debug "Found #{images.length} images"
 
 			async.map images, (image, next) =>
-				# In order to inspect the image, one tag is needed. RepoTags[0] is enough.
-				@getImageByName image.RepoTags[0], (error, imageInfo) ->
-					if error
-						debug "Error ocurred: #{error.message}"
-						return next error
-					next null, imageInfo
+				@getImageByName image.RepoTags[0], next
 			, cb
 
 	removableImages: (cb) =>
@@ -133,9 +126,7 @@ class Docker extends EventEmitter
 		}, (error, { runningContainers, allImages } = {}) ->
 			return cb error if error
 
-			toRemove = getRemovableImages runningContainers, allImages
-
-			cb null, toRemove
+			cb null, getRemovableImages runningContainers, allImages
 
 	removeOldImages: (cb) =>
 		async.waterfall [
@@ -156,6 +147,7 @@ class Docker extends EventEmitter
 				@dockerClient.listImages cb
 			(allImages, cb) =>
 				untaggedImages = filterUntaggedImages allImages
+
 				log.info "Found #{untaggedImages.length} untagged images"
 
 				async.eachSeries untaggedImages, (image, cb) =>
@@ -164,8 +156,6 @@ class Docker extends EventEmitter
 		], cb
 
 	getImageByName: (name, cb) ->
-		debug "Get image by name", name
-
 		@dockerClient
 			.getImage name
 			.inspect (error, info) ->
@@ -183,7 +173,7 @@ class Docker extends EventEmitter
 		entity   = id
 		entity or= name
 
-		log.info "Removing image #{entity}, forced: #{!!force}"
+		log.info "Removing image #{entity}, forced: #{not not force}"
 
 		@dockerClient
 			.getImage entity
@@ -218,21 +208,12 @@ class Docker extends EventEmitter
 				return cb error if error
 				cb null, compact formattedContainers
 
-	listContainersNames: (cb) =>
-		@dockerClient.listContainers all: true, (error, containers) ->
-			return cb error if error
-
-			async.map containers, (container, next) ->
-				next null, container.Names[0].replace "/", ""
-			, (error, names) ->
-				return cb error if error
-				cb null, compact names
-
 	getContainerByName: (name, cb) =>
-		container = @dockerClient.getContainer name
-		container.inspect { size: 1 }, (error, info) =>
-			return cb error if error
-			cb null, @serializeContainer info
+		@dockerClient
+			.getContainer name
+			.inspect size: 1, (error, info) =>
+				return cb error if error
+				cb null, @serializeContainer info
 
 	serializeContainer: (containerInfo) ->
 		started = moment(new Date(containerInfo.State.StartedAt)).fromNow()
@@ -266,7 +247,6 @@ class Docker extends EventEmitter
 		mounts        : containerInfo.Mounts.filter (mount) ->
 			hostPath: mount.Source, containerPath: mount.Destination, mode: mount.Mode
 		labels: containerInfo.Config.Labels
-
 
 	createContainer: ({ containerProps }, cb) ->
 		log.info "Creating container #{containerProps.name} ..."
@@ -305,7 +285,7 @@ class Docker extends EventEmitter
 
 	removeContainer: ({ id, force = false }, cb) ->
 		return cb()
-		log.info "Removing container `#{id}`"
+		log.info "Removing container '#{id}'"
 
 		@listContainers (error, containers) =>
 			if error
@@ -351,7 +331,7 @@ class Docker extends EventEmitter
 				return cb new Error errStr
 
 			logs = logs
-				.split("\n")
+				.split  "\n"
 				.filter (l) -> not isEmpty l
 				.map    (l) -> l.substr 8, l.length - 1
 

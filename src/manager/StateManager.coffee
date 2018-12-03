@@ -1,102 +1,108 @@
-_     = require "lodash"
-async = require "async"
-debug = (require "debug") "app:StateManager"
-fs    = require "fs"
-path  = require "path"
+_      = require "lodash"
+async  = require "async"
+config = require "config"
+debug  = (require "debug") "app:StateManager"
+fs     = require "fs"
 
 pkg            = require "../../package.json"
 getIpAddresses = require "../helpers/getIPAddresses"
 log            = (require "../lib/Logger") "StateManager"
 
-module.exports = (config, getSocket, docker) ->
-	clientId   = config.host
+class StateManager
+	constructor: (@socket, @docker) ->
+		@clientId           = config.mqtt.clientId
+		@localState         = globalGroups: {}
+		@nsState            = {}
+		@throttledPublishes = {}
 
-	localState =
-		globalGroups:    {}
+		@throttledSendState    = _.throttle @sendStateToMqtt,    config.state.sendStateThrottleTime
+		@throttledSendAppState = _.throttle @sendAppStateToMqtt, config.state.sendAppStateThrottleTime
 
-	nsState                  = {}
-	throttledCustomPublishes = {}
+	publish: (options, cb) =>
+		topic   = "devices/#{@clientId}/#{options.topic}"
+		message = options.message
+		message = JSON.stringify message unless _.isString message
 
-	customPublish = (opts, cb) ->
-		socket = getSocket()
+		debug "Sending data to #{topic}"
+		@socket.publish topic, message, options.opts, cb
 
-		unless socket
-			log.warn "Could not custom publish on topic `#{opts.topic}`"
-			return cb?()
-
-		debug "Sending data to #{opts.topic}"
-
-		socket.publish opts.topic, opts.message, opts.opts, cb
-
-	_sendStateToMqtt = (cb) ->
-		log.info "Sending state.."
-		_generateStateObject (error, state) ->
-			return cb error if error
+	sendStateToMqtt: (cb) =>
+		@generateStateObject (error, state) =>
+			return cb? error if error
 
 			debug "State is", JSON.stringify _.omit state, ["images", "containers"]
 
 			stateStr   = JSON.stringify state
-			byteLength = Buffer.byteLength stateStr, 'utf8'
-			log.warn "State exceeds recommended byte length: #{byteLength}/20000 bytes" if byteLength > 20000 # .02MB spam per 2 sec = 864MB in 24 hrs
+			byteLength = Buffer.byteLength stateStr, "utf8"
 
-			customPublish
-				topic: "devices/#{clientId}/state"
-				message: stateStr
+			# .02MB spam per 2 sec = 864MB in 24 hrs
+			if byteLength > 20000
+				log.warn "State exceeds recommended byte length: #{byteLength}/20000 bytes"
+
+			@publish
+				topic:   "state"
+				message: state
 				opts:
 					retain: true
 					qos: 1
 			, (error) ->
 				if error
-					log.error "Error in custom state publish: #{error.message}"
+					log.error "Error while publishing state: #{error.message}"
 				else
 					log.info "State published!"
 
 				cb? error
 
-	throttledSendState = _.throttle (-> _sendStateToMqtt()), config.sendStateThrottleTime
+	sendAppStateToMqtt: (cb) =>
+		@docker.listContainers (error, containers) =>
+			return cb? error if error
 
-	notifyOnlineStatus = () ->
+			@publish
+				topic:   "nsState/containers"
+				message: containers
+				opts:
+					retain: false
+			, (error) ->
+				return cb? error if error
+
+				debug "App state published"
+				cb?()
+
+	notifyOnlineStatus: =>
 		log.info "Setting status: online"
-		customPublish
-			topic: "devices/#{clientId}/status"
+
+		@publish
+			topic:   "status"
 			message: "online"
 			opts:
 				retain: true
-				qos:    1
 
-	publishLog = ({ type, message, time }) ->
-		data = JSON.stringify { type, message, time }
-		debug "Sending: #{data}"
-		customPublish
-			topic: "devices/#{clientId}/logs"
-			message: data
+	publishLog: ({ type, message, time }) ->
+		@publish
+			topic: "logs"
+			message: { type, message, time }
 			opts:
 				retain: true
 				qos:    0
 		, (error) ->
-			return log.error "Error in customPublish: #{error.message}" if error
-			debug "Sent: #{data}"
+			return log.error "Error while publishing log: #{error.message}" if error
 
-	# One of the ideas behind this approach is that we can give it any arbitrary object with some top level keys and it
-	# will automagically put it into topics namespaced by those top level keys
-	# NOTE! This function will side effect on the nsState object! : )
-	publishNamespacedState = (newState, cb) ->
+	publishNamespacedState: (newState, cb) ->
 		return cb?() if _.isEmpty newState
 
-		async.eachOf newState, (val, key, cb) ->
-			currentVal = nsState[key]
-			return cb() if _.isEqual currentVal, val
+		async.eachOf newState, (val, key, next) =>
+			currentVal = @nsState[key]
+			return next() if _.isEqual currentVal, val
 
-			nsState[key] = val
+			@nsState[key] = val
 			stringified  = JSON.stringify val
 			byteLength   = Buffer.byteLength stringified, 'utf8'
 
-			log.warn "#{key}: Buffer.byteLength = #{byteLength}!" if byteLength > 1024
+			log.warn "#{key}: Buffer.byteLength = #{byteLength}" if byteLength > 1024
 
-			throttledCustomPublishes[key] or= _.throttle customPublish, config.sendStateThrottleTime
-
-			throttledCustomPublishes[key]
-				topic: "devices/#{clientId}/nsState/#{key}"
+			@throttledPublishes[key] or= _.throttle @publish, config.sendStateThrottleTime
+			@throttledPublishes[key]
+				topic:   "nsState/#{key}"
 				message: stringified
 				opts:
 					retain: true
@@ -104,119 +110,84 @@ module.exports = (config, getSocket, docker) ->
 			, (error) ->
 				log.error "Error in customPublish: #{error.message}" if error
 
-			cb()
-		, -> cb?()
+			next()
+		, cb
 
-	throttledSendAppState = _.throttle ->
-		docker.listContainers (error, containers) ->
-			return log.error log.error if error
-
-			customPublish
-				topic:   "devices/#{clientId}/nsState/containers"
-				message: JSON.stringify containers
-				opts:
-					retain: false
-			, (error) ->
-				return log.error "Error publishing app state: #{error.message}" if error
-
-				debug "App state published"
-	, config.sendAppStateThrottleTime
-
-	sendNsState = ->
-		async.eachOf nsState, (val, key, cb) ->
-			customPublish
-				topic:   "devices/#{clientId}/nsState/#{key}"
-				message: JSON.stringify val
+	sendNsState: (cb) ->
+		async.eachOf @nsState, (val, key, next) =>
+			@publish
+				topic:   "nsState/#{key}"
+				message: val
 				opts:    retain: true
-			, cb
-		, (error) ->
-			return log.error "Error publishing namespaced state: #{error.message}" if error
+			, next
+		, (error) =>
+			if error
+				log.error "Error publishing namespaced state: #{error.message}"
+				return cb? error
 
-			log.info "Namespaced state published for #{_(nsState).keys().join ", "}"
+			log.info "Namespaced state published for #{Object.keys(@nsState).join ", "}"
+			cb?()
 
-	getDeviceId = -> clientId
-
-	getGroups = ->
-		debug "Groups file: #{config.groups.path}"
-
+	getGroups: ->
 		unless fs.existsSync config.groups.path
-			setDefaultGroups()
+			@setDefaultGroups()
 			log.info "Groups configured with default configuration"
 
 		try
 			groups = JSON.parse (fs.readFileSync config.groups.path).toString()
-		catch error
+		catch
 			log.error "Error while parsing groups, setting default configuration ..."
-			setDefaultGroups()
+			@setDefaultGroups()
 
-		groups = _.extend groups, 1: "default"
-
-		debug "Groups: #{JSON.stringify groups}"
-
+		groups = Object.assign {}, groups, 1: "default"
+		debug "Groups: #{Object.values(groups).join ', '} (from #{config.groups.path})"
 		groups
 
-	setDefaultGroups = ->
-		setGroups 1: "default"
+	setGroups: (groups) ->
+		log.info "Setting groups to #{Object.values(groups).join ', '}"
 
-	setGroups = (groups) ->
-		groups = "#{JSON.stringify groups}\n"
-		log.info "Setting groups file: #{groups}"
-		fs.writeFileSync config.groups.path, groups
+		fs.writeFileSync config.groups.path, JSON.stringify groups
+		@throttledSendState()
 
-		throttledSendState()
+	setDefaultGroups: ->
+		@setGroups 1: "default"
 
-	setGlobalGroups = (globalGroups) ->
-		debug "Set global groups to: #{JSON.stringify globalGroups}"
-		localState = _.extend {}, localState, { globalGroups }
+	setGlobalGroups: (globalGroups) ->
+		debug "Global groups: #{Object.values(globalGroups).join ", "}"
+		Object.assign @localState, { globalGroups }
 
-	# The global groups come out of mqtt. These are all groups available to all devices
-	getGlobalGroups = ->
-		localState.globalGroups
+	getGlobalGroups: ->
+		@localState.globalGroups
 
-	updateFinishedQueueList = (finishedTask) ->
-		oldList = nsState["finishedQueueList"] or []
-		newList = [ finishedTask ].concat oldList.slice 0, 9 # only keep 10
+	updateFinishedQueueList: (finishedTask) ->
+		oldList = @nsState["finishedQueueList"] or []
+		newList = [finishedTask].concat oldList.slice 0, 9 # only keep 10
 
-		publishNamespacedState finishedQueueList: newList
+		@publishNamespacedState finishedQueueList: newList
 
-	_generateStateObject = (cb) ->
-		debug "Generating state object"
-
+	generateStateObject: (cb) ->
 		async.parallel
-			images:     docker.listImages
-			containers: docker.listContainers
-			systemInfo: docker.getDockerInfo
-		, (error, { images, containers, systemInfo }) ->
+			images:     @docker.listImages
+			containers: @docker.listContainers
+			systemInfo: @docker.getDockerInfo
+		, (error, { images, containers, systemInfo } = {}) =>
 			if error
 				log.error "Error generating state object: #{error.message}"
 				return cb error
 
-			groups     = _(getGroups()).values()
-			systemInfo = _.extend {},
+			groups     = Object.values @getGroups()
+			systemInfo = Object.assign {},
 				systemInfo
 				getIpAddresses()
-				dmVersion: pkg.version
+				appVersion: pkg.version
 
-			state = _.extend {},
+			state = Object.assign {},
 				{ groups }
 				{ systemInfo }
 				{ images }
 				{ containers }
-				{ deviceId: clientId }
+				{ deviceId: @clientId }
 
 			cb null, state
 
-	return {
-		getDeviceId
-		getGlobalGroups
-		getGroups
-		notifyOnlineStatus
-		publishLog
-		publishNamespacedState
-		updateFinishedQueueList
-		setGlobalGroups
-		setGroups
-		throttledSendAppState
-		throttledSendState
-		sendNsState
-	}
+module.exports = StateManager

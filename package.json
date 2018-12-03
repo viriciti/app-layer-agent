@@ -1,9 +1,8 @@
 {
   "name": "app-layer-agent",
-  "version": "1.15.0",
+  "version": "2.0.0-alpha",
   "scripts": {
     "start": "nodemon src/main.coffee",
-    "develop": "NODE_ENV=dev nodemon src/main.coffee",
     "test": "./bin/coffeetape test/*.test.coffee | tap-summary",
     "build": "coffee --output build --compile src"
   },

@@ -1,4 +1,3 @@
-path          = require "path"
 { promisify } = require "util"
 debug         = (require "debug") "app:registerImageActions"
 
@@ -9,4 +8,4 @@ module.exports = ({ baseMethod, rpc, docker }) ->
 		debug "Removing image '#{id}'"
 		await promisify(docker.removeImage.bind docker) { id, force }
 
-	registerMethod rpc, path.join(baseMethod, "onRemoveImage"), onRemoveImage
+	registerMethod rpc, "#{baseMethod}/onRemoveImage", onRemoveImage

@@ -1,5 +1,4 @@
 debug         = (require "debug") "app:registerContainerActions"
-path          = require "path"
 { promisify } = require "util"
 
 registerMethod = require "../helpers/registerMethod"
@@ -17,6 +16,6 @@ module.exports = ({ baseMethod, rpc, docker }) ->
 		debug "Fetching logs for container '#{id}'"
 		await promisify(docker.getContainerLogs.bind docker) { id, numOfLogs: 100 }
 
-	registerMethod rpc, path.join(baseMethod, "removeContainer"),  onRemoveContainer
-	registerMethod rpc, path.join(baseMethod, "restartContainer"), onRestartContainer
-	registerMethod rpc, path.join(baseMethod, "getContainerLogs"), onFetchContainerLogs
+	registerMethod rpc, "#{baseMethod}/removeContainer",  onRemoveContainer
+	registerMethod rpc, "#{baseMethod}/restartContainer", onRestartContainer
+	registerMethod rpc, "#{baseMethod}/getContainerLogs", onFetchContainerLogs

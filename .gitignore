@@ -1,3 +1,4 @@
+.app-layer-agent
 node_modules
 build
 config/local.*
