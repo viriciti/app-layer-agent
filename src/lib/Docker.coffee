@@ -11,9 +11,8 @@ S                                            = require "string"
 { every, isEmpty, compact }                  = require "lodash"
 { filterUntaggedImages, getRemovableImages } = require "@viriciti/app-layer-logic"
 
-log                                          = (require "./Logger") "Docker"
-DockerLogsParser                             = require "./DockerLogsParser"
-LayerFixer                                   = require "./LayerFixer"
+log              = (require "./Logger") "Docker"
+DockerLogsParser = require "./DockerLogsParser"
 
 class Docker extends EventEmitter
 	constructor: ({ @socketPath, @maxRetries, @registry_auth }) ->
@@ -85,7 +84,6 @@ class Docker extends EventEmitter
 			pump [
 				stream
 				jsonstream2.parse()
-				new LayerFixer config.docker.layer.regex
 			], (error) =>
 				clearInterval _pullingPingTimeout
 
