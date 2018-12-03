@@ -47,17 +47,13 @@ class AppUpdater
 				@docker.listContainers (error, containers) ->
 					return next error if error
 
-					next null, containers.reduce (keyedContainers, container) ->
+					currentApps = containers.reduce (keyedContainers, container) ->
 						{ keyedContainers..., [container.name]: container }
 					, {}
-			(currentApps, next) ->
-				extendedGroups = createGroupsMixin globalGroups,   groups
-				appsToChange   = getAppsToChange   extendedGroups, currentApps
+					extendedGroups = createGroupsMixin globalGroups,   groups
+					appsToChange   = getAppsToChange   extendedGroups, currentApps
 
-				debug "Current applications are    #{JSON.stringify Object.keys currentApps}"
-				debug "Calculated applications are #{JSON.stringify Object.keys extendedGroups}"
-
-				next null, appsToChange
+					next null, appsToChange
 			(appsToChange, next) =>
 				return setImmediate next unless (
 					appsToChange.install.length or
