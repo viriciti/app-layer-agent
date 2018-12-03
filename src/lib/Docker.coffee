@@ -310,8 +310,8 @@ class Docker extends EventEmitter
 
 			logs = logs
 				.split  "\n"
-				.filter (l) -> not isEmpty l
-				.map    (l) -> l.substr 8, l.length - 1
+				.filter (line) -> not isEmpty line
+				.map    (line) -> line.substr 8, line.length - 1
 
 			cb null, logs
 
