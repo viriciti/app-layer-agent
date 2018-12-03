@@ -8,4 +8,4 @@ module.exports = ({ baseMethod, rpc, docker }) ->
 		debug "Removing image '#{id}'"
 		await promisify(docker.removeImage.bind docker) { id, force }
 
-	registerMethod rpc, "#{baseMethod}/onRemoveImage", onRemoveImage
+	registerMethod rpc, "#{baseMethod}/removeImage", onRemoveImage

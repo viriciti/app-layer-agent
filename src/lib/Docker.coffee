@@ -291,27 +291,22 @@ class Docker extends EventEmitter
 				cb error
 
 	getContainerLogs: ({ id, numOfLogs }, cb) ->
-		log.info "Getting `#{numOfLogs}` logs for `#{id}`"
-
-		if not numOfLogs or numOfLogs > 100
-			return cb null, [ "\u001b[32minfo\u001b[39m: [DeviceManager] Invalid Log Request" ]
-
 		container = @dockerClient.getContainer id
-		logsOpts =
+		options   =
 			stdout: true
 			stderr: true
-			tail:   numOfLogs
+			tail:   100
 			follow: false
 
-		container.logs logsOpts, (error, logs) ->
+		container.logs options, (error, logs) ->
 			if error
-				log.error "Error retrieving container logs for `#{id}`"
+				log.error "Error retrieving container logs for '#{id}'"
 				return cb error
 
 			unless logs
-				errStr = "Did not receive logs!"
-				log.error errStr
-				return cb new Error errStr
+				error = new Error "No logs available for #{id}"
+				log.warn error.message
+				return cb new Error error
 
 			logs = logs
 				.split  "\n"

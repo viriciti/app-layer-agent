@@ -14,7 +14,7 @@ module.exports = ({ baseMethod, rpc, docker }) ->
 
 	onFetchContainerLogs = ({ id }) ->
 		debug "Fetching logs for container '#{id}'"
-		await promisify(docker.getContainerLogs.bind docker) { id, numOfLogs: 100 }
+		await promisify(docker.getContainerLogs.bind docker) { id }
 
 	registerMethod rpc, "#{baseMethod}/removeContainer",  onRemoveContainer
 	registerMethod rpc, "#{baseMethod}/restartContainer", onRestartContainer
