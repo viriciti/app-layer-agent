@@ -42,9 +42,7 @@ class StateManager
 			@publish
 				topic:   "state"
 				message: state
-				opts:
-					retain: true
-					qos: 1
+				opts:    retain: true
 			, (error) ->
 				if error
 					log.error "Error while publishing state: #{error.message}"
@@ -60,8 +58,6 @@ class StateManager
 			@publish
 				topic:   "nsState/containers"
 				message: containers
-				opts:
-					retain: false
 			, (error) ->
 				return cb? error if error
 
@@ -69,21 +65,20 @@ class StateManager
 				cb?()
 
 	notifyOnlineStatus: =>
-		log.info "Setting status: online"
-
 		@publish
 			topic:   "status"
 			message: "online"
-			opts:
-				retain: true
+			opts:    retain: true
+		, (error) ->
+			return log.error if error
+
+			log.info "Status set to online"
 
 	publishLog: ({ type, message, time }) ->
 		@publish
-			topic: "logs"
+			topic:   "logs"
 			message: { type, message, time }
-			opts:
-				retain: true
-				qos:    0
+			opts:    retain: true
 		, (error) ->
 			return log.error "Error while publishing log: #{error.message}" if error
 
@@ -104,9 +99,7 @@ class StateManager
 			@throttledPublishes[key]
 				topic:   "nsState/#{key}"
 				message: stringified
-				opts:
-					retain: true
-					qos:    0
+				opts:    retain: true
 			, (error) ->
 				log.error "Error in customPublish: #{error.message}" if error
 

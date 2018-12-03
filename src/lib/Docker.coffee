@@ -1,19 +1,15 @@
-{ EventEmitter }            = require "events"
-config                      = require "config"
-async                       = require "async"
-debug                       = (require "debug") "app:Docker"
-Dockerode                   = require "dockerode"
-jsonstream2                 = require "jsonstream2"
-moment                      = require "moment"
-pump                        = require "pump"
-rimraf                      = require "../lib/rimraf"
-S                           = require "string"
-{ every, isEmpty, compact } = require "lodash"
-
-{
-	filterUntaggedImages,
-	getRemovableImages
-} = require "@viriciti/app-layer-logic"
+{ EventEmitter }                             = require "events"
+config                                       = require "config"
+async                                        = require "async"
+debug                                        = (require "debug") "app:Docker"
+Dockerode                                    = require "dockerode"
+jsonstream2                                  = require "jsonstream2"
+moment                                       = require "moment"
+pump                                         = require "pump"
+rimraf                                       = require "../lib/rimraf"
+S                                            = require "string"
+{ every, isEmpty, compact }                  = require "lodash"
+{ filterUntaggedImages, getRemovableImages } = require "@viriciti/app-layer-logic"
 
 log                                          = (require "./Logger") "Docker"
 DockerLogsParser                             = require "./DockerLogsParser"

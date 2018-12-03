@@ -5,8 +5,8 @@ mqtt           = require "mqtt"
 
 log          = require("./lib/Logger") "main"
 Docker       = require "./lib/Docker"
-AppUpdater   = require './manager/AppUpdater'
-StateManager = require './manager/StateManager'
+AppUpdater   = require "./manager/AppUpdater"
+StateManager = require "./manager/StateManager"
 
 registerContainerActions = require "./actions/registerContainerActions"
 registerGroupActions     = require "./actions/registerGroupActions"
@@ -16,6 +16,7 @@ registerDeviceActions    = require "./actions/registerDeviceActions"
 will =
 	topic:   "devices/#{config.mqtt.clientId}/status"
 	payload: "offline"
+	retain:  true
 
 log.info "Booting up manager ..."
 
@@ -89,21 +90,16 @@ onError = (error) ->
 onReconnect = ->
 	log.warn "Reconnecting to the MQTT broker ..."
 
-onOffline = ->
-	log.warn "Offline ..."
+onOffline = (reason) ->
+	log.warn "Disconnected ..."
 
-onClose = (reason) ->
-	console.log reason
-
+onClose = ->
 	client
 		.removeListener "connect",   onConnect
 		.removeListener "message",   onMessage
 		.removeListener "error",     onError
 		.removeListener "reconnect", onReconnect
-		.removeListener "offline",   onOffline
 		.removeListener "close",     onClose
-
-	throw new Error "Lost connection to the MQTT broker at #{mqttUrl}. Restarting ..."
 
 client
 	.on "connect",   onConnect
