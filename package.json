@@ -30,7 +30,6 @@
     "coffeescript": "^2.3.2",
     "config": "^1.30.0",
     "debug": "^3.1.0",
-    "device-mqtt": "^1.0.10",
     "dockerode": "^2.5.5",
     "jsonstream2": "^1.1.1",
     "lodash": "^4.17.11",
