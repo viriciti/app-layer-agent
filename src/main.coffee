@@ -37,6 +37,13 @@ log.info "Connecting to #{mqttUrl} as #{options.clientId} ..."
 onConnect = ->
 	log.info "Connected to the MQTT broker"
 
+	client
+		.on "message",   onMessage
+		.on "error",     onError
+		.on "reconnect", onReconnect
+		.on "offline",   onOffline
+		.on "close",     onClose
+
 	actionOptions =
 		appUpdater: appUpdater
 		baseMethod: "#{config.mqtt.actions.basePath}#{options.clientId}"
@@ -95,19 +102,12 @@ onOffline = (reason) ->
 
 onClose = ->
 	client
-		.removeListener "connect",   onConnect
 		.removeListener "message",   onMessage
 		.removeListener "error",     onError
 		.removeListener "reconnect", onReconnect
 		.removeListener "close",     onClose
 
-client
-	.on "connect",   onConnect
-	.on "message",   onMessage
-	.on "error",     onError
-	.on "reconnect", onReconnect
-	.on "offline",   onOffline
-	.on "close",     onClose
+client.on "connect", onConnect
 
 docker.on "logs", (data) ->
 	return unless data
