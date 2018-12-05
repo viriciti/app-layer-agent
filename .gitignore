@@ -1,0 +1,9 @@
+.app-layer-agent
+node_modules
+build
+config/local.*
+config/local.*
+config/local-*.*
+config/local-*-*.*
+config/test.*
+package-lock.json
