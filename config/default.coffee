@@ -25,9 +25,6 @@ module.exports =
 		sendAppStateThrottleTime: 3000
 
 	docker:
-		layer:
-			regex: /(\/(var\/lib\/)?docker\/image\/overlay2\/layerdb\/sha256\/[\w\d]+)/
-			maxPullRetries: 5
 		socketPath: "/var/run/docker.sock"
 		maxRetries: 5
 		registry_auth:
