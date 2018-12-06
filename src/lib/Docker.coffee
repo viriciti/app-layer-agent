@@ -1,5 +1,4 @@
 { EventEmitter }                             = require "events"
-config                                       = require "config"
 async                                        = require "async"
 debug                                        = (require "debug") "app:Docker"
 Dockerode                                    = require "dockerode"
@@ -7,17 +6,18 @@ jsonstream2                                  = require "jsonstream2"
 moment                                       = require "moment"
 pump                                         = require "pump"
 S                                            = require "string"
-{ every, isEmpty, compact }                  = require "lodash"
+{ every, isEmpty, compact, random }          = require "lodash"
 { filterUntaggedImages, getRemovableImages } = require "@viriciti/app-layer-logic"
+config                                       = require "config"
 
 log              = (require "./Logger") "Docker"
 DockerLogsParser = require "./DockerLogsParser"
 
 class Docker extends EventEmitter
-	constructor: ({ @socketPath, @maxRetries, @registry_auth }) ->
+	constructor: ->
 		super()
 
-		@dockerClient = new Dockerode socketPath: @socketPath, maxRetries: @maxRetries
+		@dockerClient = new Dockerode socketPath: config.docker.socketPath
 		@logsParser   = new DockerLogsParser @
 
 		@dockerClient.getEvents (error, stream) =>
@@ -57,36 +57,48 @@ class Docker extends EventEmitter
 				linuxKernel: info.KernelVersion
 			}
 
-	pullImage: ({ name }, cb, pullRetries = 0) =>
+	pullImage: ({ name }, cb) =>
 		log.info "Pulling image '#{name}'..."
 
-		if pullRetries > config.docker.layer.maxPullRetries
-			return cb new Error "Unable to fix docker layer: too many retries"
-
 		credentials = null
-		credentials = @registry_auth.credentials if every @registry_auth.credentials
+		credentials = config.docker.registryAuth.credentials if every config.docker.registryAuth.credentials
+		retryIn     = random config.docker.minWaitingTime, config.docker.maxWaitingTime
 
-		@dockerClient.pull name, { authconfig: credentials }, (error, stream) =>
-			if error
-				log.error "Error pulling `#{name}`: #{error.message}"
-				return cb error
+		log.info "Retrying after #{retryIn}ms in case of a failure"
 
-			_pullingPingTimeout = setInterval =>
-				debug "Emitting pull logs"
-				@emit "logs",
-					message: "Pulling #{name}"
-					image: name
-					type: "action"
-					time: Date.now()
-			, 3000
+		async.retry
+			# 25 to 75 minutes maximum
+			times: 5
+			interval: ->
+				retryIn
+			errorFilter: (error) ->
+				error
+					.message
+					.match /\(HTTP code 50[234]\)/
+		, (next) =>
+			@dockerClient.pull name, { authconfig: credentials }, (error, stream) =>
+				if error
+					log.error "Error pulling `#{name}`: #{error.message}"
+					return next error
 
-			pump [
-				stream
-				jsonstream2.parse()
-			], (error) ->
-				clearInterval _pullingPingTimeout
+				_pullingPingTimeout = setInterval =>
+					debug "Emitting pull logs"
+					@emit "logs",
+						message: "Pulling #{name}"
+						image: name
+						type: "action"
+						time: Date.now()
+				, 3000
 
-				cb error
+
+				pump [
+					stream
+					jsonstream2.parse()
+				], (error) ->
+					clearInterval _pullingPingTimeout
+
+					next error
+		, cb
 
 	listImages: (cb) =>
 		debug "Listing images ..."
@@ -267,6 +279,8 @@ class Docker extends EventEmitter
 				cb null, "Container #{id} restarted correctly"
 
 	removeContainer: ({ id, force = false }, cb) ->
+		return cb() unless config.docker.allowContainerRemoval
+
 		log.info "Removing container '#{id}'"
 
 		@listContainers (error, containers) =>
@@ -289,7 +303,7 @@ class Docker extends EventEmitter
 
 				cb error
 
-	getContainerLogs: ({ id, numOfLogs }, cb) ->
+	getContainerLogs: ({ id }, cb) ->
 		container = @dockerClient.getContainer id
 		options   =
 			stdout: true

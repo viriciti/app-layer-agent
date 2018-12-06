@@ -18,16 +18,19 @@ module.exports =
 			basePath: "actions/"
 
 	groups:
-		path: path.join os.homedir(), ".groups"
+		path: path.resolve os.homedir(), ".groups"
 
 	state:
 		sendStateThrottleTime:    10000
 		sendAppStateThrottleTime: 3000
 
 	docker:
+		allowContainerRemoval: true
+		minWaitingTime:        5 * 1000 * 60  # 5 minutes
+		maxWaitingTime:        15 * 1000 * 60 # 15 minutes
+		maxRetries:            5
 		socketPath: "/var/run/docker.sock"
-		maxRetries: 5
-		registry_auth:
+		registryAuth:
 			credentials:
 				username:      process.env.GITLAB_USER_NAME
 				password:      process.env.GITLAB_USER_ACCESS_TOKEN

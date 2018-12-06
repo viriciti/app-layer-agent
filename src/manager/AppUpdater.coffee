@@ -144,7 +144,8 @@ class AppUpdater
 
 				@docker.pullImage name: containerInfo.Image, (error) ->
 					return next error if error
-					log.info "Image #{containerInfo.Image} pulled correctly."
+
+					log.info "Image #{containerInfo.Image} pulled correctly"
 					next()
 			(next) =>
 				return next() if @isPastLastInstallStep "Clean", appConfig.lastInstallStep

@@ -26,7 +26,7 @@ options      = omit options, "tls" if config.development
 client       = mqtt.connect options
 
 rpc          = new RPC client
-docker       = new Docker config.docker
+docker       = new Docker
 state        = new StateManager client, docker
 appUpdater   = new AppUpdater   docker, state
 

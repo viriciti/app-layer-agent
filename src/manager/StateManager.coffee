@@ -23,7 +23,6 @@ class StateManager
 		message = options.message
 		message = JSON.stringify message unless _.isString message
 
-		debug "Sending data to #{topic}"
 		@socket.publish topic, message, options.opts, cb
 
 	sendStateToMqtt: (cb) =>
@@ -151,12 +150,6 @@ class StateManager
 
 	getGlobalGroups: ->
 		@localState.globalGroups
-
-	updateFinishedQueueList: (finishedTask) ->
-		oldList = @nsState["finishedQueueList"] or []
-		newList = [finishedTask].concat oldList.slice 0, 9 # only keep 10
-
-		@publishNamespacedState finishedQueueList: newList
 
 	generateStateObject: (cb) ->
 		async.parallel
