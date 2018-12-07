@@ -62,23 +62,27 @@ class Docker extends EventEmitter
 
 		credentials = null
 		credentials = config.docker.registryAuth.credentials if every config.docker.registryAuth.credentials
-		retryIn     = random config.docker.minWaitingTime, config.docker.maxWaitingTime
-
-		log.info "Retrying after #{retryIn}ms in case of a failure"
+		retryIn     = 0
 
 		async.retry
-			# 25 to 75 minutes maximum
-			times: 5
+			times: config.docker.retry.maxAttempts
 			interval: ->
 				retryIn
 			errorFilter: (error) ->
-				error
-					.message
-					.match /\(HTTP code 50[234]\)/
+				return false unless error.statusCode in config.docker.retry.errorCodes
+
+				retryIn = random config.docker.retry.minWaitingTime, config.docker.retry.maxWaitingTime
+				log.warn "Pulling #{name} failed, retrying after #{retryIn}ms"
+
+				true
 		, (next) =>
 			@dockerClient.pull name, { authconfig: credentials }, (error, stream) =>
 				if error
-					log.error "Error pulling `#{name}`: #{error.message}"
+					if error.message.match /unauthorized/
+						log.error "No permission to pull #{name}"
+					else unless error.statusCode in config.docker.retry.errorCodes
+						log.error error.message
+
 					return next error
 
 				_pullingPingTimeout = setInterval =>
@@ -89,7 +93,6 @@ class Docker extends EventEmitter
 						type: "action"
 						time: Date.now()
 				, 3000
-
 
 				pump [
 					stream
@@ -135,7 +138,7 @@ class Docker extends EventEmitter
 		], cb
 
 	removeUntaggedImages: (cb) ->
-		log.info "Removing untagged images"
+		log.info "Removing untagged images ..."
 
 		async.waterfall [
 			(cb) =>
@@ -164,28 +167,26 @@ class Docker extends EventEmitter
 					virtualSize: info.VirtualSize
 				}
 
-	removeImage: ({ name, id, force }, cb) ->
+	removeImage: ({ name, id }, cb) ->
 		entity   = id
 		entity or= name
 
-		log.info "Removing image #{entity}, forced: #{not not force}"
+		log.info "Removing image #{entity}"
 
 		@dockerClient
 			.getImage entity
-			.remove { force }, (error) ->
+			.remove (error) ->
 				if error
-					errorMsg = error.message or error.json?.message
-					if not force
-						msg = "#{entity} not removed: #{errorMsg}. Continuing..."
-						log.warn msg
-						return cb null, msg
-
-					log.error "Error removing image: #{errorMsg}"
-					return cb error
+					if error.statusCode is 409
+						message = "Conflict: image #{entity} is used by a container"
+						log.warn message
+						return cb null, message
+					else
+						log.error error.message
+						return cb error
 
 				log.info "Removed image #{entity} successfully"
-				cb null, "Image #{entity} removed correctly"
-
+				cb()
 
 	listContainers: (cb) =>
 		@dockerClient.listContainers all: true, (error, containers) =>

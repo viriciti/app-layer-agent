@@ -30,8 +30,14 @@ docker       = new Docker
 state        = new StateManager client, docker
 appUpdater   = new AppUpdater   docker, state
 
-mqttProtocol = if options.tls? then "mqtts" else "mqtt"
-mqttUrl      = "#{mqttProtocol}://#{options.host}:#{options.port}"
+mqttProtocol  = if options.tls? then "mqtts" else "mqtt"
+mqttUrl       = "#{mqttProtocol}://#{options.host}:#{options.port}"
+actionOptions =
+		appUpdater: appUpdater
+		baseMethod: "#{config.mqtt.actions.baseTopic}#{options.clientId}"
+		docker:     docker
+		rpc:        rpc
+		state:      state
 
 log.info "Connecting to #{mqttUrl} as #{options.clientId} ..."
 onConnect = ->
@@ -43,13 +49,6 @@ onConnect = ->
 		.on "reconnect", onReconnect
 		.on "offline",   onOffline
 		.on "close",     onClose
-
-	actionOptions =
-		appUpdater: appUpdater
-		baseMethod: "#{config.mqtt.actions.basePath}#{options.clientId}"
-		docker:     docker
-		rpc:        rpc
-		state:      state
 
 	state.notifyOnlineStatus()
 	state.throttledSendState()
@@ -75,7 +74,7 @@ onMessage = (topic, message) ->
 		responseTopic = "commands/#{origin}/#{actionId}/response"
 
 		rpc
-			.call "#{config.mqtt.actions.basePath}#{options.clientId}/#{action}", payload
+			.call "#{config.mqtt.actions.baseTopic}#{options.clientId}/#{action}", payload
 			.then (result) ->
 				client.publish responseTopic, JSON.stringify
 					action:      action

@@ -15,7 +15,7 @@ module.exports =
 			reconnectPeriod:    5000
 			rejectUnauthorized: true
 		actions:
-			basePath: "actions/"
+			baseTopic: "actions/"
 
 	groups:
 		path: path.resolve os.homedir(), ".groups"
@@ -26,10 +26,12 @@ module.exports =
 
 	docker:
 		allowContainerRemoval: true
-		minWaitingTime:        5 * 1000 * 60  # 5 minutes
-		maxWaitingTime:        15 * 1000 * 60 # 15 minutes
-		maxRetries:            5
 		socketPath: "/var/run/docker.sock"
+		retry:
+			minWaitingTime: 5 * 1000 * 60  # 5 minutes
+			maxWaitingTime: 15 * 1000 * 60 # 15 minutes
+			maxAttempts:    5
+			errorCodes:    [502, 503, 504]
 		registryAuth:
 			credentials:
 				username:      process.env.GITLAB_USER_NAME
