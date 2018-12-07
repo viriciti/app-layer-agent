@@ -1,6 +1,6 @@
 {
   "name": "app-layer-agent",
-  "version": "1.16.0",
+  "version": "1.16.1",
   "scripts": {
     "start": "nodemon src/main.coffee",
     "test": "./bin/coffeetape test/*.test.coffee | tap-summary",
