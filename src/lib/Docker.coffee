@@ -52,10 +52,11 @@ class Docker extends EventEmitter
 	getDockerInfo: (cb) =>
 		@dockerClient.version (error, info) ->
 			return cb error if error
-			cb null, {
-				version: info.Version,
-				linuxKernel: info.KernelVersion
-			}
+
+			cb null,
+				apiVerion: info.ApiVersion
+				version:   info.Version
+				kernel:    info.KernelVersion
 
 	pullImage: ({ name }, cb) =>
 		log.info "Pulling image '#{name}'..."
@@ -171,14 +172,14 @@ class Docker extends EventEmitter
 		entity   = id
 		entity or= name
 
-		log.info "Removing image #{entity}"
+		log.info "Removing image #{@getShortenedImageId entity}"
 
 		@dockerClient
 			.getImage entity
-			.remove (error) ->
+			.remove (error) =>
 				if error
 					if error.statusCode is 409
-						message = "Conflict: image #{entity} is used by a container"
+						message = "Conflict: image #{@getShortenedImageId entity} is used by a container"
 						log.warn message
 						return cb null, message
 					else
@@ -328,5 +329,10 @@ class Docker extends EventEmitter
 				.map    (line) -> line.substr 8, line.length - 1
 
 			cb null, logs
+
+	getShortenedImageId: (id) ->
+		return id unless id.startsWith "sha256:"
+
+		id.substring 7, 7 + 12
 
 module.exports = Docker
