@@ -1,7 +1,7 @@
-RPC            = require "mqtt-json-rpc"
-config         = require "config"
-mqtt           = require "mqtt"
-{ omit, last } = require "lodash"
+RPC                   = require "mqtt-json-rpc"
+config                = require "config"
+mqtt                  = require "mqtt"
+{ omit, last, every } = require "lodash"
 
 log          = require("./lib/Logger") "main"
 Docker       = require "./lib/Docker"
@@ -30,7 +30,7 @@ docker       = new Docker config.docker
 state        = new StateManager client, docker
 appUpdater   = new AppUpdater   docker, state
 
-mqttProtocol = if options.tls? then "mqtts" else "mqtt"
+mqttProtocol = if every options.tls then "mqtts" else "mqtt"
 mqttUrl      = "#{mqttProtocol}://#{options.host}:#{options.port}"
 
 log.info "Connecting to #{mqttUrl} as #{options.clientId} ..."
