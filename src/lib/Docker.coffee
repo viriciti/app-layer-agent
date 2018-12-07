@@ -267,7 +267,7 @@ class Docker extends EventEmitter
 			.getContainer id
 			.start (error) ->
 				if error
-					log.error "Starting container `#{id}` failed: #{error.message}"
+					log.error "Starting container '#{id}' failed: #{error.message}"
 					return cb error
 
 				cb null, "Container #{id} started correctly"
@@ -279,7 +279,7 @@ class Docker extends EventEmitter
 			.getContainer id
 			.restart (error) ->
 				if error
-					log.error "Restarting container `#{id}` failed: #{error.message}"
+					log.error "Restarting container '#{id}' failed: #{error.message}"
 					return cb error
 
 				cb null, "Container #{id} restarted correctly"
@@ -299,13 +299,13 @@ class Docker extends EventEmitter
 			async.eachSeries toRemove, (c, cb) =>
 				(@dockerClient.getContainer c.Id).remove { force }, (error) ->
 					if error
-						log.error "Error removing `#{id}`: #{error.message}"
+						log.error "Error removing '#{id}': #{error.message}"
 					cb error
 			, (error) ->
 				if error
 					log.error "Error in removing one of the containers"
 				else
-					log.info "Removed container `#{id}`"
+					log.info "Removed container '#{id}'"
 
 				cb error
 
