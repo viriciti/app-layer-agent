@@ -105,19 +105,25 @@ class StateManager
 			next()
 		, cb
 
-	sendNsState: (cb) ->
-		async.eachOf @nsState, (val, key, next) =>
+	sendNsState: (nsState, cb) ->
+		if _.isFunction nsState
+			cb      = nsState
+			nsState = @nsState
+		else
+			nsState or= @nsState
+
+		async.eachOf nsState, (val, key, next) =>
 			@publish
 				topic:   "nsState/#{key}"
 				message: val
 				opts:    retain: true
 			, next
-		, (error) =>
+		, (error) ->
 			if error
 				log.error "Error publishing namespaced state: #{error.message}"
 				return cb? error
 
-			log.info "Namespaced state published for #{Object.keys(@nsState).join ", "}"
+			log.info "Namespaced state published for #{Object.keys(nsState).join ", "}"
 			cb?()
 
 	getGroups: ->

@@ -250,7 +250,11 @@ class Docker extends EventEmitter
 
 		@dockerClient.createContainer containerProps, (error, created) ->
 			if error
-				log.error "Creating container `#{containerProps.name}` failed: #{error.message}"
+				if error.statusCode is 409
+					log.error "A container with the name #{containerProps.name} already exists"
+				else unless error.statusCode in config.docker.retry.errorCodes
+					log.error error.message
+
 				return cb error
 
 			log.info "Created container #{containerProps.name}"

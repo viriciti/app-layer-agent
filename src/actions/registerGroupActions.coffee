@@ -32,6 +32,7 @@ module.exports = ({ baseMethod, rpc, state, appUpdater }) ->
 		, {}
 
 		state.setGroups Object.assign {}, currentGroups, newGroups
+		state.sendNsState groups: Object.values state.getGroups()
 		appUpdater.queueUpdate state.getGlobalGroups(), state.getGroups()
 
 	onRemoveGroup = (name) ->
@@ -40,6 +41,7 @@ module.exports = ({ baseMethod, rpc, state, appUpdater }) ->
 		currentGroups = state.getGroups()
 
 		state.setGroups removeGroupFromGroups name, currentGroups
+		state.sendNsState groups: Object.values state.getGroups()
 		appUpdater.queueUpdate state.getGlobalGroups(), state.getGroups()
 
 	registerMethod rpc, "#{baseMethod}/storeGroups", onStoreGroups
