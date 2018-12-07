@@ -62,7 +62,7 @@ class Docker extends EventEmitter
 
 		credentials = null
 		credentials = config.docker.registryAuth.credentials if every config.docker.registryAuth.credentials
-		retryIn     = 0
+		retryIn     = 1000 * 60
 
 		async.retry
 			times: config.docker.retry.maxAttempts
