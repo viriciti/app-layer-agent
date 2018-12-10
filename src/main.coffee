@@ -1,7 +1,7 @@
-RPC            = require "mqtt-json-rpc"
-config         = require "config"
-mqtt           = require "mqtt"
-{ omit, last } = require "lodash"
+RPC                     = require "mqtt-json-rpc"
+config                  = require "config"
+mqtt                    = require "mqtt"
+{ omit, last, isArray } = require "lodash"
 
 log          = require("./lib/Logger") "main"
 Docker       = require "./lib/Docker"
@@ -34,7 +34,7 @@ mqttProtocol  = if options.tls? then "mqtts" else "mqtt"
 mqttUrl       = "#{mqttProtocol}://#{options.host}:#{options.port}"
 actionOptions =
 		appUpdater: appUpdater
-		baseMethod: "#{config.mqtt.actions.baseTopic}#{options.clientId}"
+		baseName: "#{config.mqtt.actions.baseTopic}#{options.clientId}"
 		docker:     docker
 		rpc:        rpc
 		state:      state
@@ -71,19 +71,25 @@ onMessage = (topic, message) ->
 		json                        = JSON.parse message.toString()
 		{ action, origin, payload } = json
 
-		responseTopic = "commands/#{origin}/#{actionId}/response"
+		topic   = "commands/#{origin}/#{actionId}/response"
+		payload = [payload] unless isArray payload
+		params  = [
+			"#{config.mqtt.actions.baseTopic}#{options.clientId}/#{action}"
+			...payload
+		]
 
 		rpc
-			.call "#{config.mqtt.actions.baseTopic}#{options.clientId}/#{action}", payload
+			.call
+			.apply rpc, params
 			.then (result) ->
-				client.publish responseTopic, JSON.stringify
+				client.publish topic, JSON.stringify
 					action:      action
 					data:        result
 					statusCode: "OK"
 			.catch (error) ->
 				log.error error.message
 
-				client.publish responseTopic, JSON.stringify
+				client.publish topic, JSON.stringify
 					action:     action
 					data:       error
 					statusCode: "ERROR"

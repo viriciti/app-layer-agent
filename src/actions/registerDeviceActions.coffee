@@ -1,12 +1,12 @@
 debug = (require "debug") "app:registerDeviceActions"
 
-registerMethod = require "../helpers/registerMethod"
+registerFunction = require "../helpers/registerFunction"
 
-module.exports = ({ baseMethod, rpc, state }) ->
+module.exports = ({ baseName, rpc, state }) ->
 	onRefreshState = ->
 		debug "Refreshing state ..."
 
 		state.throttledSendState()
 		state.sendNsState()
 
-	registerMethod rpc, "#{baseMethod}/refreshState", onRefreshState
+	registerFunction rpc, "#{baseName}/refreshState", onRefreshState
