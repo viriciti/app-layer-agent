@@ -14,6 +14,9 @@ COPY src /app/src
 COPY config /app/config
 RUN npm run build
 
+# Configure properties
+LABEL group="default"
+LABEL manual=false
 CMD ["node", "/app/build/main.js"]
 
 RUN [ "cross-build-end" ]

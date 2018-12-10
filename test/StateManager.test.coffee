@@ -1,8 +1,8 @@
-assert = require "assert"
-async  = require "async"
-config = require "config"
-spy    = require "spy"
-{ map } = require "lodash"
+assert            = require "assert"
+async             = require "async"
+config            = require "config"
+spy               = require "spy"
+{ map, identity } = require "lodash"
 
 Docker       = require "../src/lib/Docker"
 StateManager = require "../src/manager/StateManager"
@@ -12,15 +12,16 @@ docker = new Docker
 describe ".StateManager", ->
 	it "should publish on topic with top level key", (done) ->
 		mocket         = {}
-		mocket.publish = (topic) ->
-			assert.equal topic, "devices/test-device/nsState/je"
-
-		state = new StateManager mocket
+		mocket.publish = spy identity
+		state          = new StateManager mocket
 
 		state.publishNamespacedState
 			je:
 				moeder: 1
-		, done
+		, (error) ->
+			assert.ifError error
+			assert.equal mocket.publish.calls[0].return, "devices/test-device/nsState/je"
+			done()
 
 	it "should not publish when sending equal state object", (done) ->
 		mocket = publish: spy()
@@ -31,7 +32,8 @@ describe ".StateManager", ->
 				je:
 					moeder: "Hetzelfde"
 			, next
-		, ->
+		, (error) ->
+			assert.ifError error
 			assert.equal mocket.publish.callCount, 1
 			done()
 
@@ -75,17 +77,17 @@ describe ".StateManager", ->
 		async.eachSeries states, (s, next) ->
 			setTimeout ->
 				state.publishNamespacedState s, next
-			, config.state.sendStateThrottleTime * 2
-		, ->
-			setImmediate ->
-				lastState = mocket
-					.publish
-					.calls[mocket.publish.callCount - 1]
-					.return
+			, config.state.sendStateThrottleTime
+		, (error) ->
+			lastState = mocket
+				.publish
+				.calls[mocket.publish.callCount - 1]
+				.return
 
-				assert.equal mocket.publish.callCount, 3
-				assert.deepEqual lastState, states[3].topLevelKey
-				done()
+			assert.ifError error
+			assert.equal mocket.publish.callCount, 3
+			assert.deepEqual lastState, states[3].topLevelKey
+			done()
 
 
 	it "should callback immediatly when sending empty", (done) ->
@@ -98,8 +100,7 @@ describe ".StateManager", ->
 
 	it "should put data in separate topics", (done) ->
 		mocket         = {}
-		mocket.publish = spy (topic) ->
-			topic
+		mocket.publish = spy identity
 
 		state = new StateManager mocket
 
