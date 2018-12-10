@@ -1,8 +1,8 @@
-{ isEmpty, pickBy, size, debounce, map } = require "lodash"
-async                                    = require "async"
-debug                                    = (require "debug") "app:AppUpdater"
-{ createGroupsMixin, getAppsToChange }   = require "@viriciti/app-layer-logic"
-log                                      = (require "../lib/Logger") "AppUpdater"
+{ isEmpty, pickBy, first, debounce, map } = require "lodash"
+async                                     = require "async"
+debug                                     = (require "debug") "app:AppUpdater"
+{ createGroupsMixin, getAppsToChange }    = require "@viriciti/app-layer-logic"
+log                                       = (require "../lib/Logger") "AppUpdater"
 
 class AppUpdater
 	constructor: (@docker, @state) ->
@@ -36,11 +36,9 @@ class AppUpdater
 		debug "Global groups are", globalGroups
 		debug "Device groups are", groups
 
-		return cb new Error "No groups" if isEmpty globalGroups
-
-		if size(globalGroups) is 1 and not globalGroups["default"]
-			return cb new Error "Size of global groups is 1, but the group is not default.
-				Global groups are misconfigured!"
+		return cb new Error "No groups"                       if isEmpty globalGroups
+		return cb new Error "No default group"                unless globalGroups["default"]
+		return cb new Error "Default group must appear first" unless first(Object.keys globalGroups) is "default"
 
 		async.waterfall [
 			(next) =>

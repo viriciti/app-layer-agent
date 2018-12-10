@@ -1,14 +1,12 @@
 assert     = require "assert"
-{ noop }   = require "lodash"
 AppUpdater = require "../src/manager/AppUpdater"
 
-describe ".AppUpdater", ->
-	it "should error if default group does not exist", (done) ->
-		updater                        = new AppUpdater {}
-		updater.publishNamespacedState = noop
+groups = {}
 
+describe ".AppUpdater", ->
+	beforeEach ->
 		groups =
-			somegroup:
+			default:
 				app1:
 					containerName: "app1"
 					fromImage: "image1:1.0.0"
@@ -21,12 +19,38 @@ describe ".AppUpdater", ->
 					labels:
 						group: "somegroup"
 						manual: false
+			name:
+				app1:
+					containerName: "app1"
+					fromImage: "image1:2.1.0"
+					labels:
+						group: "somegroup"
+						manual: false
+				app2:
+					containerName: "app2"
+					fromImage: "image2:4.1.0"
+					labels:
+						group: "somegroup"
+						manual: false
 
-		deviceGroups = undefined
+	afterEach ->
+		groups = {}
 
-		updater.update groups, deviceGroups, (error) ->
-			assert.equal error.message
-			, "Size of global groups is 1, but the group is not default. Global groups are misconfigured!"
-			, "Should callback immediately when group size is 1 but group is not 'default'"
+	it "should error if default group does not exist", (done) ->
+		delete groups["default"]
 
+		updater = new AppUpdater
+
+		updater.update groups, [], (error) ->
+			assert.ok error.message.match /no default group/i
+			done()
+
+	it "should error if default group is not the first group", (done) ->
+		updater      = new AppUpdater
+		groups       =
+			name:    groups.name
+			default: groups["default"]
+
+		updater.update groups, [], (error) ->
+			assert.ok error.message.match /Default group must appear first/i
 			done()
