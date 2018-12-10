@@ -17,6 +17,8 @@ class Docker extends EventEmitter
 	constructor: ->
 		super()
 
+		log.warn "Container removal is disabled" unless config.docker.allowContainerRemoval
+
 		@dockerClient = new Dockerode socketPath: config.docker.socketPath
 		@logsParser   = new DockerLogsParser @
 
@@ -28,7 +30,7 @@ class Docker extends EventEmitter
 				.on "error", @handleStreamError
 				.on "data",  @handleStreamData
 				.once "end", ->
-					log.warn "Closed connection to Docker daemon."
+					log.warn "Closed connection to Docker daemon"
 
 			@emit "status", "initiated"
 
