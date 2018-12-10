@@ -4,6 +4,7 @@
   "scripts": {
     "start": "nodemon src/main.coffee",
     "test": "NODE_ENV=test mocha",
+    "test:watch": "NODE_ENV=test mocha -w --watch-extensions coffee",
     "build": "coffee --output build --compile src"
   },
   "repository": {
@@ -20,6 +21,7 @@
     "nodemon": "^1.18.7",
     "rsync": "^0.6.1",
     "run-sequence": "^2.2.1",
+    "spy": "^1.0.0",
     "supports-color": "^5.4.0"
   },
   "dependencies": {

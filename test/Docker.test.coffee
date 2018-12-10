@@ -1,5 +1,5 @@
-{ assert } = require "assert"
-_          = require "lodash"
+assert = require "assert"
+_      = require "lodash"
 { filterUntaggedImages, getRemovableImages } = require "@viriciti/app-layer-logic"
 
 Docker = require "../src/lib/Docker"
@@ -9,7 +9,7 @@ describe ".Docker", ->
 		{ allImages, runningContainers } = require "../meta/running-images"
 		toRemove                         = getRemovableImages runningContainers, allImages
 
-		assert.deepEqual toRemove, [ 'asdf:2.0.0', 'dingen:1.0.0', 'dingen:0.0.1' ], "Incorrect images to remove!"
+		assert.deepEqual toRemove, [ 'asdf:2.0.0', 'dingen:1.0.0', 'dingen:0.0.1' ]
 
 	it "should list untagged images", ->
 		stubImages = [
@@ -51,7 +51,8 @@ describe ".Docker", ->
 		]
 
 		untagged = filterUntaggedImages stubImages
-		assert.deepEqual untagged, (_(stubImages).first 2), "Should filter out the correct images"
+
+		assert.deepEqual untagged, _.take stubImages, 2
 
 	it "should remove untagged images", (done) ->
 		docker = new Docker

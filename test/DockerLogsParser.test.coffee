@@ -13,7 +13,7 @@ mockParser = ->
 	parser
 
 describe ".DockerLogsParser", ->
-	it "should parse logs coming from handling an image", (done) ->
+	it "should parse logs coming from handling an image", ->
 		parser = mockParser()
 		tests  = [
 			{
@@ -99,9 +99,7 @@ describe ".DockerLogsParser", ->
 
 		tests.forEach (t) ->
 			parsedMessage = parser.parseLogs t.toTest
-
-			assert.deepEqual parsedMessage, t.expected,
-				"should parse the logs and return a meaningful message when Actions is #{t.testType}"
+			assert.deepEqual parsedMessage, t.expected
 
 	it "should parse logs coming from handling a container", ->
 		parser = mockParser()
@@ -193,5 +191,3 @@ describe ".DockerLogsParser", ->
 			parsedMessage = parser.parseLogs t.toTest
 			assert.deepEqual parsedMessage, t.expected,
 				"should parse the logs and return a meaningful message when Actions is #{t.testType}"
-
-		assert.end()

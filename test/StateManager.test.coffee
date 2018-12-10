@@ -1,6 +1,8 @@
+assert = require "assert"
 async  = require "async"
 config = require "config"
-assert = require "assert"
+spy    = require "spy"
+{ map } = require "lodash"
 
 Docker       = require "../src/lib/Docker"
 StateManager = require "../src/manager/StateManager"
@@ -9,77 +11,62 @@ docker = new Docker
 
 describe ".StateManager", ->
 	it "should publish on topic with top level key", ->
-		mocket = {}
-		mocket.customPublish = (data) ->
-			assert.equal data.topic, "devices/test-device/nsState/je", "It publishes on topic with top level key"
+		mocket         = {}
+		mocket.publish = (topic) ->
+			assert.equal topic, "devices/test-device/nsState/je"
 
-		getSocket = -> mocket
-		state     = new StateManager config, getSocket, docker
+		state = new StateManager mocket
 
 		state.publishNamespacedState { je: { moeder: 1 } }
 
 	it "should not publish when sending equal state object", (done) ->
-		mocket  = {}
-		counter = 0
-		mocket.customPublish = (data) ->
-			counter += 1
+		mocket = publish: spy()
+		state  = new StateManager mocket
 
-		getSocket = -> mocket
-		state     = new StateManager config, getSocket, docker
+		async.timesSeries 3, (n, cb) ->
 
-		async.eachSeries [1..3], (i, cb) ->
 			setTimeout ->
 				state.publishNamespacedState { je: { moeder: "Hetzelfde" } }, cb
-			, config.sendStateThrottleTime * 2
+			, config.sendStateThrottleTime * n
 		, ->
 			setTimeout ->
-				assert.equal counter, 1, "Should not publish when sending equal state object"
+				assert.equal mocket.publish.callCount, 1
+
 				done()
 			, config.sendStateThrottleTime * 2
 
 	it "should throttle properly", (done) ->
-		mocket  = {}
-		counter = 0
+		mocket         = {}
+		mocket.publish = spy (topic, message) ->
+			message = JSON.parse message
 
-		mocket.customPublish = (data) ->
-			++counter
-			msg = JSON.parse data.message
-			if counter is 1
-				assert.deepEqual msg, { moeder: 1 }, "Should send the state immediately even though throttled"
+			if @publish.callCount is 0
+				assert.deepEqual message, moeder: 0
+			else if @publish.callCount is 1
+				assert.deepEqual message, moeder: 2
 
-			if counter is 2
-				assert.deepEqual msg, { moeder: 3 }, "Should have skipped the second send and go straight to the latest state"
-				assert.equal counter, 2, "customPublish should have been called 2 times"
+		state = new StateManager mocket
 
-		getSocket = -> mocket
-
-		state = new StateManager config, getSocket, docker
-
-		async.eachSeries [1..3], (i, cb) ->
+		async.times 3, (i, cb) ->
 			state.publishNamespacedState { je: { moeder: i } }, cb
 		, ->
 			setTimeout done, config.sendStateThrottleTime * 2
 
 	it "should publish when nested values are changed, but not when equal", (done) ->
-		mocket  = {}
-		counter = 0
-		lastState = null
-		mocket.customPublish = (data) ->
-			lastState = JSON.parse data.message
-			counter++
+		mocket         = {}
+		mocket.publish = spy (topic, message) ->
+			JSON.parse message
 
-		getSocket = -> mocket
 
-		state = new StateManager config, getSocket, docker
-
+		state  = new StateManager mocket
 		states =
 			[
-				{ topLevelKey: { moeder: 1, bla: [ { yolo: "dingen"} ] } }
-				{ topLevelKey: { moeder: 1, bla: [ { yolo: "dingen"}, { yolo: "meer dingen", arr: [ { key: "val1" } ] } ] } }
-				{ topLevelKey: { moeder: 1, bla: [ { yolo: "dingen"}, { yolo: "meer dingen", arr: [ { key: "val2" } ] } ] } }
-				{ topLevelKey: { moeder: 1, bla: [ { yolo: "dingen"}, { yolo: "meer dingen", arr: [ { key: "val2" } ] } ] } } # Same : )
-				{ topLevelKey: { moeder: 1, bla: [ { yolo: "dingen"}, { yolo: "meer dingen", arr: [ { key: "val2" } ] } ] } } # Same : )
-				{ topLevelKey: { moeder: 1, bla: [ { yolo: "dingen"}, { yolo: "meer dingen", arr: [ { key: "val2" } ] } ] } } # Same : )
+				{ topLevelKey: { moeder: 1, bla: [ { yolo: "dingen" } ] } }
+				{ topLevelKey: { moeder: 1, bla: [ { yolo: "dingen" }, { yolo: "meer dingen", arr: [ { key: "val1" } ] } ] } }
+				{ topLevelKey: { moeder: 1, bla: [ { yolo: "dingen" }, { yolo: "meer dingen", arr: [ { key: "val2" } ] } ] } }
+				{ topLevelKey: { moeder: 1, bla: [ { yolo: "dingen" }, { yolo: "meer dingen", arr: [ { key: "val2" } ] } ] } }
+				{ topLevelKey: { moeder: 1, bla: [ { yolo: "dingen" }, { yolo: "meer dingen", arr: [ { key: "val2" } ] } ] } }
+				{ topLevelKey: { moeder: 1, bla: [ { yolo: "dingen" }, { yolo: "meer dingen", arr: [ { key: "val2" } ] } ] } }
 			]
 
 		async.eachSeries states, (s, cb) ->
@@ -88,36 +75,33 @@ describe ".StateManager", ->
 			, config.sendStateThrottleTime + 10
 		, ->
 			setTimeout ->
-				assert.equal counter, 3, "Should publish with changing deeply nested values, but not when equal"
-				assert.deepEqual lastState, states[3].topLevelKey, "Should have the last state"
+				lastState = mocket
+					.publish
+					.calls[mocket.publish.callCount - 1]
+					.return
+
+				assert.equal mocket.publish.callCount, 3
+				assert.deepEqual lastState, states[3].topLevelKey
 				done()
 			, config.sendStateThrottleTime + 10
 
 
 	it "should callback immediatly when sending empty", (done) ->
-		mocket  = {}
-		counter = 0
-		mocket.customPublish = (data) ->
-			counter++
-
-		getSocket = -> mocket
-
-		state = new StateManager config, getSocket, docker
+		mocket = publish: spy()
+		state  = new StateManager mocket
 
 		state.publishNamespacedState null, ->
 			setTimeout ->
-				assert.equal counter, 0, "Should cb immediately when sending empty"
+				assert.ifError mocket.publish.called
 				done()
 			, 50
 
 	it "should put data in separate topics", (done) ->
-		mocket  = {}
-		topics  = []
-		mocket.customPublish = (data) ->
-			topics.push data.topic
+		mocket         = {}
+		mocket.publish = spy (topic) ->
+			topic
 
-		getSocket = -> mocket
-		state     = new StateManager config, getSocket, docker
+		state = new StateManager mocket
 
 		state.publishNamespacedState {
 			one:   { dingen: "dingen1" }
@@ -126,7 +110,7 @@ describe ".StateManager", ->
 			four:  { dingen: "dingen4" }
 			five:  { dingen: "dingen5" }
 		}, ->
-			expectedTopics = [
+			assert.deepEqual map(mocket.publish.calls, "return"), [
 				"devices/test-device/nsState/one"
 				"devices/test-device/nsState/two"
 				"devices/test-device/nsState/three"
@@ -134,9 +118,9 @@ describe ".StateManager", ->
 				"devices/test-device/nsState/five"
 			]
 
-			assert.deepEqual topics, expectedTopics, "It should put data in seperate topics"
 			docker
 				.dockerEventStream
 				.once "end", ->
 					done()
+
 			docker.stop()
