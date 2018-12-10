@@ -120,21 +120,7 @@ class AppUpdater
 		currentStep > endStep
 
 	installApp: (appConfig, cb) ->
-		containerInfo =
-			name:         appConfig.containerName
-			AttachStdin:  not appConfig.detached
-			AttachStdout: not appConfig.detached
-			AttachStderr: not appConfig.detached
-			Env:          appConfig.environment
-			Cmd:          appConfig.entryCommand
-			Image:        appConfig.fromImage
-			Labels:       appConfig.labels #NOTE https://docs.docker.com/config/labels-custom-metadata/#value-guidelines
-			HostConfig:
-				Binds:         appConfig.mounts
-				NetworkMode:   appConfig.networkMode
-				Privileged:    not not appConfig.privileged
-				RestartPolicy: Name: appConfig.restartPolicy # why 0?
-				PortBindings:  appConfig.ports
+		containerInfo = @normalizeAppConfiguration appConfig
 
 		async.series [
 			(next) =>
@@ -164,5 +150,30 @@ class AppUpdater
 
 			log.info "Application #{containerInfo.name} installed correctly"
 			cb()
+
+	normalizeAppConfiguration: (appConfiguration) ->
+		name:         appConfiguration.containerName
+		AttachStdin:  not appConfiguration.detached
+		AttachStdout: not appConfiguration.detached
+		AttachStderr: not appConfiguration.detached
+		Env:          appConfiguration.environment
+		Cmd:          appConfiguration.entryCommand
+		Image:        appConfiguration.fromImage
+		Labels:       appConfiguration.labels #NOTE https://docs.docker.com/config/labels-custom-metadata/#value-guidelines
+		HostConfig:
+			Mounts:        @bindsToMounts appConfiguration.mounts
+			NetworkMode:   appConfiguration.networkMode
+			Privileged:    not not appConfiguration.privileged
+			RestartPolicy: Name: appConfiguration.restartPolicy
+			PortBindings:  appConfiguration.ports
+
+	bindsToMounts: (binds) ->
+		binds.map (bind) ->
+			[source, target, ro] = bind.split ":"
+
+			ReadOnly: not not ro
+			Source:   source
+			Target:   target
+			Type:     "bind"
 
 module.exports = AppUpdater

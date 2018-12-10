@@ -93,7 +93,7 @@ describe ".StateManager", ->
 		state  = new StateManager mocket
 
 		state.publishNamespacedState null, ->
-			assert.ifError mocket.publish.called
+			assert.equal mocket.publish.called, 0
 			done()
 
 	it "should put data in separate topics", (done) ->

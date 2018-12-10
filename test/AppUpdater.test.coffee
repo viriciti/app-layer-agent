@@ -1,7 +1,10 @@
 assert     = require "assert"
 AppUpdater = require "../src/manager/AppUpdater"
+Docker     = require "../src/lib/Docker"
 
-groups = {}
+groups            = {}
+docker            = new Docker
+testContainerName = "app-layer-agent-test-container"
 
 describe ".AppUpdater", ->
 	beforeEach ->
@@ -33,6 +36,10 @@ describe ".AppUpdater", ->
 						group: "somegroup"
 						manual: false
 
+	after (done) ->
+		docker.removeContainer testContainerName, ->
+			done()
+
 	afterEach ->
 		groups = {}
 
@@ -53,4 +60,53 @@ describe ".AppUpdater", ->
 
 		updater.update groups, [], (error) ->
 			assert.ok error.message.match /Default group must appear first/i
+			done()
+
+	it "should be able to convert binds to mounts", ->
+		updater = new AppUpdater
+		binds   = [
+			"/version:/root/.version:ro"
+			"/docker:/docker"
+			"/data:/data"
+		]
+		expected = [
+			ReadOnly: true
+			Source:   "/version"
+			Target:   "/root/.version"
+			Type:     "bind"
+		,
+			ReadOnly: false
+			Source:   "/docker"
+			Target:   "/docker"
+			Type:     "bind"
+		,
+			ReadOnly: false
+			Source:   "/data"
+			Target:   "/data"
+			Type:     "bind"
+		]
+
+		assert.deepEqual updater.bindsToMounts(binds), expected
+
+	it "should fail to create if host file does not exist", (done) ->
+		docker    = new Docker
+		updater   = new AppUpdater docker
+		appConfig = updater.normalizeAppConfiguration
+			restartPolicy: "always",
+			containerName:  testContainerName,
+			networkMode:   "host",
+			fromImage:     "hello-world",
+			detached:      false,
+			environment:   [],
+			privileged:    true,
+			version:       "^1.0.0",
+			mounts: [
+				"/this/will/never/exist/ok:/version/mount"
+			],
+			applicationName: testContainerName
+
+		docker.createContainer containerProps: appConfig, (error) ->
+			assert.ok error
+			assert.ok error.message.match /bind source path does not exist/i
+			assert.equal error.statusCode, 400
 			done()
