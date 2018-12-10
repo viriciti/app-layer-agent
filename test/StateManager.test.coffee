@@ -10,30 +10,30 @@ StateManager = require "../src/manager/StateManager"
 docker = new Docker
 
 describe ".StateManager", ->
-	it "should publish on topic with top level key", ->
+	it "should publish on topic with top level key", (done) ->
 		mocket         = {}
 		mocket.publish = (topic) ->
 			assert.equal topic, "devices/test-device/nsState/je"
 
 		state = new StateManager mocket
 
-		state.publishNamespacedState { je: { moeder: 1 } }
+		state.publishNamespacedState
+			je:
+				moeder: 1
+		, done
 
 	it "should not publish when sending equal state object", (done) ->
 		mocket = publish: spy()
 		state  = new StateManager mocket
 
-		async.timesSeries 3, (n, cb) ->
-
-			setTimeout ->
-				state.publishNamespacedState { je: { moeder: "Hetzelfde" } }, cb
-			, config.sendStateThrottleTime * n
+		async.timesSeries 3, (n, next) ->
+			state.publishNamespacedState
+				je:
+					moeder: "Hetzelfde"
+			, next
 		, ->
-			setTimeout ->
-				assert.equal mocket.publish.callCount, 1
-
-				done()
-			, config.sendStateThrottleTime * 2
+			assert.equal mocket.publish.callCount, 1
+			done()
 
 	it "should throttle properly", (done) ->
 		mocket         = {}
@@ -48,15 +48,18 @@ describe ".StateManager", ->
 		state = new StateManager mocket
 
 		async.times 3, (i, cb) ->
-			state.publishNamespacedState { je: { moeder: i } }, cb
+			state.publishNamespacedState
+				je:
+					moeder: i
+			, cb
 		, ->
-			setTimeout done, config.sendStateThrottleTime * 2
+			assert.equal mocket.publish.callCount, 1
+			done()
 
 	it "should publish when nested values are changed, but not when equal", (done) ->
 		mocket         = {}
 		mocket.publish = spy (topic, message) ->
 			JSON.parse message
-
 
 		state  = new StateManager mocket
 		states =
@@ -69,12 +72,12 @@ describe ".StateManager", ->
 				{ topLevelKey: { moeder: 1, bla: [ { yolo: "dingen" }, { yolo: "meer dingen", arr: [ { key: "val2" } ] } ] } }
 			]
 
-		async.eachSeries states, (s, cb) ->
+		async.eachSeries states, (s, next) ->
 			setTimeout ->
-				state.publishNamespacedState s, cb
-			, config.sendStateThrottleTime + 10
+				state.publishNamespacedState s, next
+			, config.state.sendStateThrottleTime * 2
 		, ->
-			setTimeout ->
+			setImmediate ->
 				lastState = mocket
 					.publish
 					.calls[mocket.publish.callCount - 1]
@@ -83,7 +86,6 @@ describe ".StateManager", ->
 				assert.equal mocket.publish.callCount, 3
 				assert.deepEqual lastState, states[3].topLevelKey
 				done()
-			, config.sendStateThrottleTime + 10
 
 
 	it "should callback immediatly when sending empty", (done) ->
@@ -91,10 +93,8 @@ describe ".StateManager", ->
 		state  = new StateManager mocket
 
 		state.publishNamespacedState null, ->
-			setTimeout ->
-				assert.ifError mocket.publish.called
-				done()
-			, 50
+			assert.ifError mocket.publish.called
+			done()
 
 	it "should put data in separate topics", (done) ->
 		mocket         = {}
@@ -118,9 +118,5 @@ describe ".StateManager", ->
 				"devices/test-device/nsState/five"
 			]
 
-			docker
-				.dockerEventStream
-				.once "end", ->
-					done()
-
+			docker.dockerEventStream.once "end", done
 			docker.stop()

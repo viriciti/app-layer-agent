@@ -94,7 +94,7 @@ class StateManager
 
 			log.warn "#{key}: Buffer.byteLength = #{byteLength}" if byteLength > 1024
 
-			@throttledPublishes[key] or= _.throttle @publish, config.sendStateThrottleTime
+			@throttledPublishes[key] or= _.throttle @publish, config.state.sendStateThrottleTime
 			@throttledPublishes[key]
 				topic:   "nsState/#{key}"
 				message: stringified
