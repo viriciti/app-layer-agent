@@ -2,7 +2,7 @@ assert     = require "assert"
 { noop }   = require "lodash"
 AppUpdater = require "../src/manager/AppUpdater"
 
-describe "AppUpdater", ->
+describe ".AppUpdater", ->
 	it "should error if default group does not exist", (done) ->
 		updater                        = new AppUpdater {}
 		updater.publishNamespacedState = noop
