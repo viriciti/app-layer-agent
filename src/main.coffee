@@ -1,7 +1,14 @@
+<<<<<<< HEAD
 RPC                   = require "mqtt-json-rpc"
 config                = require "config"
 mqtt                  = require "mqtt"
 { omit, last, every } = require "lodash"
+=======
+RPC                     = require "mqtt-json-rpc"
+config                  = require "config"
+mqtt                    = require "mqtt"
+{ omit, last, isArray } = require "lodash"
+>>>>>>> feature/update_tests
 
 log          = require("./lib/Logger") "main"
 Docker       = require "./lib/Docker"
@@ -26,12 +33,23 @@ options      = omit options, "tls" if config.development
 client       = mqtt.connect options
 
 rpc          = new RPC client
-docker       = new Docker config.docker
+docker       = new Docker
 state        = new StateManager client, docker
 appUpdater   = new AppUpdater   docker, state
 
+<<<<<<< HEAD
 mqttProtocol = if every options.tls then "mqtts" else "mqtt"
 mqttUrl      = "#{mqttProtocol}://#{options.host}:#{options.port}"
+=======
+mqttProtocol  = if options.tls? then "mqtts" else "mqtt"
+mqttUrl       = "#{mqttProtocol}://#{options.host}:#{options.port}"
+actionOptions =
+		appUpdater: appUpdater
+		baseName: "#{config.mqtt.actions.baseTopic}#{options.clientId}"
+		docker:     docker
+		rpc:        rpc
+		state:      state
+>>>>>>> feature/update_tests
 
 log.info "Connecting to #{mqttUrl} as #{options.clientId} ..."
 onConnect = ->
@@ -43,13 +61,6 @@ onConnect = ->
 		.on "reconnect", onReconnect
 		.on "offline",   onOffline
 		.on "close",     onClose
-
-	actionOptions =
-		appUpdater: appUpdater
-		baseMethod: "#{config.mqtt.actions.basePath}#{options.clientId}"
-		docker:     docker
-		rpc:        rpc
-		state:      state
 
 	state.notifyOnlineStatus()
 	state.throttledSendState()
@@ -72,19 +83,25 @@ onMessage = (topic, message) ->
 		json                        = JSON.parse message.toString()
 		{ action, origin, payload } = json
 
-		responseTopic = "commands/#{origin}/#{actionId}/response"
+		topic   = "commands/#{origin}/#{actionId}/response"
+		payload = [payload] unless isArray payload
+		params  = [
+			"#{config.mqtt.actions.baseTopic}#{options.clientId}/#{action}"
+			...payload
+		]
 
 		rpc
-			.call "#{config.mqtt.actions.basePath}#{options.clientId}/#{action}", payload
+			.call
+			.apply rpc, params
 			.then (result) ->
-				client.publish responseTopic, JSON.stringify
+				client.publish topic, JSON.stringify
 					action:      action
 					data:        result
 					statusCode: "OK"
 			.catch (error) ->
 				log.error error.message
 
-				client.publish responseTopic, JSON.stringify
+				client.publish topic, JSON.stringify
 					action:     action
 					data:       error
 					statusCode: "ERROR"

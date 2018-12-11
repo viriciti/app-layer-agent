@@ -1,8 +1,8 @@
 _     = require "lodash"
 debug = (require "debug") "app:registerGroupActions"
 
-log            = (require "../lib/Logger") "registerGroupActions"
-registerMethod = require "../helpers/registerMethod"
+log              = (require "../lib/Logger") "registerGroupActions"
+registerFunction = require "../helpers/registerFunction"
 
 removeGroupFromGroups = (groupToRemove, groups) ->
 	newGroups = _.without Object.values(groups), groupToRemove
@@ -12,7 +12,7 @@ removeGroupFromGroups = (groupToRemove, groups) ->
 		groupsObj
 	, {}
 
-module.exports = ({ baseMethod, rpc, state, appUpdater }) ->
+module.exports = ({ baseName, rpc, state, appUpdater }) ->
 	onStoreGroups = (names) ->
 		debug "Storing groups '#{JSON.stringify names}'"
 
@@ -32,6 +32,7 @@ module.exports = ({ baseMethod, rpc, state, appUpdater }) ->
 		, {}
 
 		state.setGroups Object.assign {}, currentGroups, newGroups
+		state.sendNsState groups: Object.values state.getGroups()
 		appUpdater.queueUpdate state.getGlobalGroups(), state.getGroups()
 
 	onRemoveGroup = (name) ->
@@ -40,7 +41,8 @@ module.exports = ({ baseMethod, rpc, state, appUpdater }) ->
 		currentGroups = state.getGroups()
 
 		state.setGroups removeGroupFromGroups name, currentGroups
+		state.sendNsState groups: Object.values state.getGroups()
 		appUpdater.queueUpdate state.getGlobalGroups(), state.getGroups()
 
-	registerMethod rpc, "#{baseMethod}/storeGroups", onStoreGroups
-	registerMethod rpc, "#{baseMethod}/removeGroup", onRemoveGroup
+	registerFunction rpc, "#{baseName}/storeGroups", onStoreGroups
+	registerFunction rpc, "#{baseName}/removeGroup", onRemoveGroup

@@ -1,6 +1,5 @@
 build
 node_modules
 config/local.*
-config/local.*
 config/local-*.*
 config/local-*-*.*

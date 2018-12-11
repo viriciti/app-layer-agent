@@ -10,4 +10,5 @@ module.exports = (label) ->
 			label:     label
 			timestamp: true
 			colorize:  true
+			silent:    process.env.NODE_ENV is "test"
 	]

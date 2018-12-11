@@ -1,9 +1,10 @@
 {
   "name": "app-layer-agent",
-  "version": "1.16.0",
+  "version": "1.16.1",
   "scripts": {
     "start": "nodemon src/main.coffee",
-    "test": "./bin/coffeetape test/*.test.coffee | tap-summary",
+    "test": "NODE_ENV=test mocha",
+    "test:watch": "NODE_ENV=test mocha -w --watch-extensions coffee",
     "build": "coffee --output build --compile src"
   },
   "repository": {
@@ -16,13 +17,12 @@
     "gulp": "^3.9.1",
     "gulp-shell": "^0.6.5",
     "leaked-handles": "^5.2.0",
+    "mocha": "^5.2.0",
     "nodemon": "^1.18.7",
     "rsync": "^0.6.1",
     "run-sequence": "^2.2.1",
-    "supports-color": "^5.4.0",
-    "tap-spec": "^4.1.1",
-    "tap-summary": "^4.0.0",
-    "tape": "^4.9.0"
+    "spy": "^1.0.0",
+    "supports-color": "^5.4.0"
   },
   "dependencies": {
     "@viriciti/app-layer-logic": "^1.2.3",

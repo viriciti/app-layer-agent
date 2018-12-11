@@ -1,169 +1,183 @@
-async = require "async"
-test  = require "tape"
+assert                     = require "assert"
+async                      = require "async"
+config                     = require "config"
+fs                         = require "fs"
+spy                        = require "spy"
+{ map, identity, isArray } = require "lodash"
 
-config =
-	host: "test-device"
-	docker:
-		socketPath: "/var/run/docker.sock"
-		maxRetries: 5
-		registry_auth:
-			required: false
+Docker       = require "../src/lib/Docker"
+StateManager = require "../src/manager/StateManager"
 
-	groups:
-		path: "/home/<username>/groups"
+docker = new Docker
 
-	development: true
+describe ".StateManager", ->
+	it "should publish on topic with top level key", (done) ->
+		mocket         = {}
+		mocket.publish = spy identity
+		state          = new StateManager mocket
 
-	sendStateThrottleTime: 50
+		state.publishNamespacedState
+			je:
+				moeder: 1
+		, (error) ->
+			assert.ifError error
+			assert.equal mocket.publish.calls[0].return, "devices/test-device/nsState/je"
+			done()
 
-Docker = require "../src/lib/Docker"
-docker = new Docker   config.docker
+	it "should not publish when sending equal state object", (done) ->
+		mocket = publish: spy()
+		state  = new StateManager mocket
 
-test "Namespaced state sending 1", (t) ->
-	StateManager = require '../src/manager/StateManager'
+		async.timesSeries 3, (n, next) ->
+			state.publishNamespacedState
+				je:
+					moeder: "Hetzelfde"
+			, next
+		, (error) ->
+			assert.ifError error
+			assert.equal mocket.publish.callCount, 1
+			done()
 
-	mocket = {}
-	mocket.customPublish = (data) ->
-		t.equal data.topic, "devices/test-device/nsState/je", "It publishes on topic with top level key"
-		t.end()
+	it "should throttle properly", (done) ->
+		mocket         = {}
+		mocket.publish = spy (topic, message) ->
+			message = JSON.parse message
 
-	getSocket = -> mocket
+			if @publish.callCount is 0
+				assert.deepEqual message, moeder: 0
+			else if @publish.callCount is 1
+				assert.deepEqual message, moeder: 2
 
-	state  = StateManager config, getSocket, docker
+		state = new StateManager mocket
 
-	state.publishNamespacedState { je: { moeder: 1 } }
+		async.times 3, (i, cb) ->
+			state.publishNamespacedState
+				je:
+					moeder: i
+			, cb
+		, ->
+			assert.equal mocket.publish.callCount, 1
+			done()
 
-test "Namespaced state sending 2", (t) ->
-	StateManager = require '../src/manager/StateManager'
+	it "should publish when nested values are changed, but not when equal", (done) ->
+		mocket         = {}
+		mocket.publish = spy (topic, message) ->
+			JSON.parse message
 
-	mocket  = {}
-	counter = 0
-	mocket.customPublish = (data) ->
-		counter++
+		state  = new StateManager mocket
+		states =
+			[
+				{ topLevelKey: { moeder: 1, bla: [ { yolo: "dingen" } ] } }
+				{ topLevelKey: { moeder: 1, bla: [ { yolo: "dingen" }, { yolo: "meer dingen", arr: [ { key: "val1" } ] } ] } }
+				{ topLevelKey: { moeder: 1, bla: [ { yolo: "dingen" }, { yolo: "meer dingen", arr: [ { key: "val2" } ] } ] } }
+				{ topLevelKey: { moeder: 1, bla: [ { yolo: "dingen" }, { yolo: "meer dingen", arr: [ { key: "val2" } ] } ] } }
+				{ topLevelKey: { moeder: 1, bla: [ { yolo: "dingen" }, { yolo: "meer dingen", arr: [ { key: "val2" } ] } ] } }
+				{ topLevelKey: { moeder: 1, bla: [ { yolo: "dingen" }, { yolo: "meer dingen", arr: [ { key: "val2" } ] } ] } }
+			]
 
-	getSocket = -> mocket
+		async.eachSeries states, (s, next) ->
+			setTimeout ->
+				state.publishNamespacedState s, next
+			, config.state.sendStateThrottleTime
+		, (error) ->
+			lastState = mocket
+				.publish
+				.calls[mocket.publish.callCount - 1]
+				.return
 
-	state  = StateManager config, getSocket, docker
-
-	async.eachSeries [1..3], (i, cb) ->
-		setTimeout ->
-			state.publishNamespacedState { je: { moeder: "Hetzelfde" } }, cb
-		, config.sendStateThrottleTime * 2
-	, ->
-		setTimeout ->
-			t.equal counter, 1, "Should not publish when sending equal state object"
-		, config.sendStateThrottleTime * 2
-		t.end()
-
-test "Namespaced state sending 3 (Basically we're testing underscore.throttle here... Future proofing)", (t) ->
-	StateManager = require '../src/manager/StateManager'
-
-	mocket  = {}
-	counter = 0
-
-	mocket.customPublish = (data) ->
-		++counter
-		msg = JSON.parse data.message
-		if counter is 1
-			t.deepEqual msg, { moeder: 1 }, "Should send the state immediately even though throttled"
-
-		if counter is 2
-			t.deepEqual msg, { moeder: 3 }, "Should have skipped the second send and go straight to the latest state"
-
-			t.equal counter, 2, "customPublish should have been called 2 times"
-
-	getSocket = -> mocket
-
-	state  = StateManager config, getSocket, docker
-
-	async.eachSeries [1..3], (i, cb) ->
-		state.publishNamespacedState { je: { moeder: i } }, cb
-	, ->
-		setTimeout t.end, config.sendStateThrottleTime * 2
-
-test "Namespaced state sending 4", (t) ->
-	StateManager = require '../src/manager/StateManager'
-
-	mocket  = {}
-	counter = 0
-	lastState = null
-	mocket.customPublish = (data) ->
-		lastState = JSON.parse data.message
-		counter++
-
-	getSocket = -> mocket
-
-	state  = StateManager config, getSocket, docker
-
-	states =
-		[
-			{ topLevelKey: { moeder: 1, bla: [ { yolo: "dingen"} ] } }
-			{ topLevelKey: { moeder: 1, bla: [ { yolo: "dingen"}, { yolo: "meer dingen", arr: [ { key: "val1" } ] } ] } }
-			{ topLevelKey: { moeder: 1, bla: [ { yolo: "dingen"}, { yolo: "meer dingen", arr: [ { key: "val2" } ] } ] } }
-			{ topLevelKey: { moeder: 1, bla: [ { yolo: "dingen"}, { yolo: "meer dingen", arr: [ { key: "val2" } ] } ] } } # Same : )
-			{ topLevelKey: { moeder: 1, bla: [ { yolo: "dingen"}, { yolo: "meer dingen", arr: [ { key: "val2" } ] } ] } } # Same : )
-			{ topLevelKey: { moeder: 1, bla: [ { yolo: "dingen"}, { yolo: "meer dingen", arr: [ { key: "val2" } ] } ] } } # Same : )
-		]
-
-	async.eachSeries states, (s, cb) ->
-		setTimeout ->
-			state.publishNamespacedState s, cb
-		, config.sendStateThrottleTime + 10
-	, ->
-		setTimeout ->
-			t.equal counter, 3, "Should publish with changing deeply nested values, but not when equal"
-			t.deepEqual lastState, states[3].topLevelKey, "Should have the last state"
-			t.end()
-		, config.sendStateThrottleTime + 10
+			assert.ifError error
+			assert.equal mocket.publish.callCount, 3
+			assert.deepEqual lastState, states[3].topLevelKey
+			done()
 
 
-test "Namespaced state sending 5", (t) ->
-	StateManager = require '../src/manager/StateManager'
+	it "should callback immediatly when sending empty", (done) ->
+		mocket = publish: spy()
+		state  = new StateManager mocket
 
-	mocket  = {}
-	counter = 0
-	mocket.customPublish = (data) ->
-		counter++
+		state.publishNamespacedState null, ->
+			assert.equal mocket.publish.called, 0
+			done()
 
-	getSocket = -> mocket
+	it "should put data in separate topics", (done) ->
+		mocket         = {}
+		mocket.publish = spy identity
 
-	state  = StateManager config, getSocket, docker
+		state = new StateManager mocket
 
-	state.publishNamespacedState null, ->
-		setTimeout ->
-			t.equal counter, 0, "Should cb immediately when sending empty"
-			t.end()
-		, 50
+		state.publishNamespacedState {
+			one:   { dingen: "dingen1" }
+			two:   { dingen: "dingen2" }
+			three: { dingen: "dingen3" }
+			four:  { dingen: "dingen4" }
+			five:  { dingen: "dingen5" }
+		}, ->
+			assert.deepEqual map(mocket.publish.calls, "return"), [
+				"devices/test-device/nsState/one"
+				"devices/test-device/nsState/two"
+				"devices/test-device/nsState/three"
+				"devices/test-device/nsState/four"
+				"devices/test-device/nsState/five"
+			]
 
+			docker.dockerEventStream.once "end", done
+			docker.stop()
 
-test "Namespaced state sending 6", (t) ->
-	StateManager = require '../src/manager/StateManager'
+	describe ".groups", ->
+		after ->
+			try
+				fs.unlinkSync config.groups.path
+			catch error
+				throw error unless error.code is "ENOENT" and error.path.match config.groups.path
 
-	mocket  = {}
-	topics  = []
-	mocket.customPublish = (data) ->
-		topics.push data.topic
+		it "should be able to read groups as an object", ->
+			fs.writeFileSync config.groups.path, JSON.stringify
+				1: "default"
+				2: "hello-world"
 
-	getSocket = -> mocket
+			state    = new StateManager
+			contents = JSON.parse fs.readFileSync config.groups.path, "utf8"
 
-	state  = StateManager config, getSocket, docker
+			assert.ok not isArray contents
+			assert.deepStrictEqual state.getGroups(), ["default", "hello-world"]
 
-	state.publishNamespacedState {
-		one:   { dingen: "dingen1" }
-		two:   { dingen: "dingen2" }
-		three: { dingen: "dingen3" }
-		four:  { dingen: "dingen4" }
-		five:  { dingen: "dingen5" }
-	}, ->
-		expectedTopics = [
-			"devices/test-device/nsState/one"
-			"devices/test-device/nsState/two"
-			"devices/test-device/nsState/three"
-			"devices/test-device/nsState/four"
-			"devices/test-device/nsState/five"
-		]
+		it "should be able to read groups as an array", ->
+			fs.writeFileSync config.groups.path, JSON.stringify ["default", "hello-world"]
 
-		t.deepEqual topics, expectedTopics, "It should put data in seperate topics"
-		docker.dockerEventStream.once "end", ->
-			t.end()
-		docker.stop()
+			state    = new StateManager
+			contents = JSON.parse fs.readFileSync config.groups.path, "utf8"
+
+			assert.ok isArray contents
+			assert.deepStrictEqual state.getGroups(), ["default", "hello-world"]
+
+		it "should send groups as an array from an object", (done) ->
+			fs.writeFileSync config.groups.path, JSON.stringify
+				1: "default"
+				2: "hello-world"
+
+			state    = new StateManager undefined, docker
+			contents = JSON.parse fs.readFileSync config.groups.path, "utf8"
+
+			assert.ok not isArray contents
+			assert.deepStrictEqual state.getGroups(), ["default", "hello-world"]
+
+			state.generateStateObject (error, { groups }) ->
+				return done error if error
+
+				assert.deepStrictEqual groups, ["default", "hello-world"]
+				done()
+
+		it "should send groups as an array from an array", (done) ->
+			fs.writeFileSync config.groups.path, JSON.stringify ["default", "hello-world"]
+
+			state    = new StateManager undefined, docker
+			contents = JSON.parse fs.readFileSync config.groups.path, "utf8"
+
+			assert.ok isArray contents
+			assert.deepStrictEqual state.getGroups(), ["default", "hello-world"]
+
+			state.generateStateObject (error, { groups }) ->
+				return done error if error
+
+				assert.deepStrictEqual groups, ["default", "hello-world"]
+				done()
