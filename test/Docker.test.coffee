@@ -1,10 +1,31 @@
-assert = require "assert"
 _      = require "lodash"
+assert = require "assert"
+config = require "config"
 { filterUntaggedImages, getRemovableImages } = require "@viriciti/app-layer-logic"
 
 Docker = require "../src/lib/Docker"
 
-describe ".Docker", ->
+mockDockerPull = (docker, returnStatusCode = 200) ->
+	throw new Error "Invalid Docker client" unless docker instanceof Docker
+
+	docker
+		.dockerClient
+		.pull = (name, options, cb) ->
+			if _.isFunction options
+				cb      = options
+				options = {}
+
+			setTimeout ->
+				error            = new Error
+				error.statusCode = returnStatusCode
+				error.json       = {}
+
+				cb error
+			, _.random 100, 500
+
+	docker
+
+describe.only ".Docker", ->
 	it "should list removable images", ->
 		{ allImages, runningContainers } = require "../meta/running-images"
 		toRemove                         = getRemovableImages runningContainers, allImages
@@ -64,3 +85,27 @@ describe ".Docker", ->
 					done()
 
 			docker.stop()
+
+	it "should not retry if status code is 500", (done) ->
+		docker = new Docker
+		docker = mockDockerPull docker, 500
+
+		docker.pullImage "hello-world", (error, stream) ->
+			assert.ifError stream
+			assert.equal error.statusCode, 500
+			done()
+
+	it "should retry if status code is 502", (done) ->
+		docker                             = new Docker
+		docker                             = mockDockerPull docker, 502
+		date                               = Date.now()
+		{ minWaitingTime, maxWaitingTime } = config.docker.retry
+		{ maxAttempts }                    = config.docker.retry
+		expectedMinimumWaitingTime         = ((maxWaitingTime - minWaitingTime) + minWaitingTime) * maxAttempts
+
+		docker.pullImage "hello-world", (error, stream) ->
+			return done new Error "Callback was called too early" if (Date.now() - date) > expectedMinimumWaitingTime
+
+			assert.ifError stream
+			assert.equal error.statusCode, 502
+			done()
