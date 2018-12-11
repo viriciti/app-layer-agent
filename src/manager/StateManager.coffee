@@ -132,23 +132,26 @@ class StateManager
 			log.info "Groups configured with default configuration"
 
 		try
-			groups = JSON.parse (fs.readFileSync config.groups.path).toString()
+			groups = JSON.parse fs.readFileSync config.groups.path, "utf8"
 		catch
 			log.error "Error while parsing groups, setting default configuration ..."
 			@setDefaultGroups()
 
-		groups = Object.assign {}, groups, 1: "default"
-		debug "Groups: #{Object.values(groups).join ', '} (from #{config.groups.path})"
+		groups = Object.values groups unless _.isArray groups
+		groups = _.without groups, "default"
+		groups = ["default", ...groups]
+
+		debug "Groups: #{groups.join ', '} (from #{config.groups.path})"
 		groups
 
 	setGroups: (groups) ->
-		log.info "Setting groups to #{Object.values(groups).join ', '}"
+		log.info "Setting groups to #{groups.join ', '}"
 
 		fs.writeFileSync config.groups.path, JSON.stringify groups
 		@throttledSendState()
 
 	setDefaultGroups: ->
-		@setGroups 1: "default"
+		@setGroups ["default"]
 
 	setGlobalGroups: (globalGroups) ->
 		debug "Global groups: #{Object.values(globalGroups).join ", "}"
@@ -167,7 +170,7 @@ class StateManager
 				log.error "Error generating state object: #{error.message}"
 				return cb error
 
-			groups     = Object.values @getGroups()
+			groups     = @getGroups()
 			systemInfo = Object.assign {},
 				systemInfo
 				getIpAddresses()

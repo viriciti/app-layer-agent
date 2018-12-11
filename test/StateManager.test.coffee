@@ -1,8 +1,9 @@
-assert            = require "assert"
-async             = require "async"
-config            = require "config"
-spy               = require "spy"
-{ map, identity } = require "lodash"
+assert                     = require "assert"
+async                      = require "async"
+config                     = require "config"
+fs                         = require "fs"
+spy                        = require "spy"
+{ map, identity, isArray } = require "lodash"
 
 Docker       = require "../src/lib/Docker"
 StateManager = require "../src/manager/StateManager"
@@ -121,3 +122,62 @@ describe ".StateManager", ->
 
 			docker.dockerEventStream.once "end", done
 			docker.stop()
+
+	describe ".groups", ->
+		after ->
+			try
+				fs.unlinkSync config.groups.path
+			catch error
+				throw error unless error.code is "ENOENT" and error.path.match config.groups.path
+
+		it "should be able to read groups as an object", ->
+			fs.writeFileSync config.groups.path, JSON.stringify
+				1: "default"
+				2: "hello-world"
+
+			state    = new StateManager
+			contents = JSON.parse fs.readFileSync config.groups.path, "utf8"
+
+			assert.ok not isArray contents
+			assert.deepStrictEqual state.getGroups(), ["default", "hello-world"]
+
+		it "should be able to read groups as an array", ->
+			fs.writeFileSync config.groups.path, JSON.stringify ["default", "hello-world"]
+
+			state    = new StateManager
+			contents = JSON.parse fs.readFileSync config.groups.path, "utf8"
+
+			assert.ok isArray contents
+			assert.deepStrictEqual state.getGroups(), ["default", "hello-world"]
+
+		it "should send groups as an array from an object", (done) ->
+			fs.writeFileSync config.groups.path, JSON.stringify
+				1: "default"
+				2: "hello-world"
+
+			state    = new StateManager undefined, docker
+			contents = JSON.parse fs.readFileSync config.groups.path, "utf8"
+
+			assert.ok not isArray contents
+			assert.deepStrictEqual state.getGroups(), ["default", "hello-world"]
+
+			state.generateStateObject (error, { groups }) ->
+				return done error if error
+
+				assert.deepStrictEqual groups, ["default", "hello-world"]
+				done()
+
+		it "should send groups as an array from an array", (done) ->
+			fs.writeFileSync config.groups.path, JSON.stringify ["default", "hello-world"]
+
+			state    = new StateManager undefined, docker
+			contents = JSON.parse fs.readFileSync config.groups.path, "utf8"
+
+			assert.ok isArray contents
+			assert.deepStrictEqual state.getGroups(), ["default", "hello-world"]
+
+			state.generateStateObject (error, { groups }) ->
+				return done error if error
+
+				assert.deepStrictEqual groups, ["default", "hello-world"]
+				done()
