@@ -103,7 +103,7 @@ onReconnect = ->
 	log.warn "Reconnecting to the MQTT broker ..."
 
 onOffline = (reason) ->
-	log.warn "Disconnected ..."
+	log.warn "Disconnected"
 
 onClose = ->
 	client

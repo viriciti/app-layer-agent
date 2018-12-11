@@ -14,7 +14,7 @@ class AppUpdater
 
 		@state.setGlobalGroups groups
 
-		groupNames = Object.values @state.getGroups()
+		groupNames = @state.getGroups()
 		groups     = pickBy groups, (_, name) -> name in groupNames
 
 		@queueUpdate groups, @state.getGroups(), (error, result) ->
