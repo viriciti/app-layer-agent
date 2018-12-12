@@ -10,7 +10,7 @@ module.exports =
 			key:  process.env.TLS_KEY
 			cert: process.env.TLS_CERT
 			ca:   process.env.TLS_CA
-		extraOpts:
+		extraOptions:
 			keepalive:          60
 			reconnectPeriod:    5000
 			rejectUnauthorized: true
