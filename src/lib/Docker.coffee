@@ -82,7 +82,7 @@ class Docker extends EventEmitter
 
 				true
 		, (next) =>
-			@dockerClient.pull name, { authconfig: credentials }, (error, stream) ->
+			@dockerClient.pull name, { authconfig: credentials }, (error, stream) =>
 				if error
 					if error.message.match /unauthorized/
 						log.error "No permission to pull #{name}"
@@ -91,7 +91,7 @@ class Docker extends EventEmitter
 
 					return next error
 
-				stream.once "close", next
+				@dockerClient.modem.followProgress stream, next
 		, (error) ->
 			clearInterval pullInterval
 
@@ -280,9 +280,10 @@ class Docker extends EventEmitter
 			toRemove = containers.filter (c) -> c.name.includes id
 
 			async.eachSeries toRemove, (c, cb) =>
-				(@dockerClient.getContainer c.Id).remove { force }, (error) ->
+				@dockerClient.getContainer(c.Id).remove { force }, (error) ->
 					if error
 						log.error "Error removing '#{id}': #{error.message}"
+
 					cb error
 			, (error) ->
 				if error

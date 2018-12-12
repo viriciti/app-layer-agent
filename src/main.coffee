@@ -1,7 +1,7 @@
-RPC                     = require "mqtt-json-rpc"
-config                  = require "config"
-mqtt                    = require "mqtt"
-{ omit, last, isArray } = require "lodash"
+RPC                            = require "mqtt-json-rpc"
+config                         = require "config"
+mqtt                           = require "mqtt"
+{ omit, last, isArray, every } = require "lodash"
 
 log          = require("./lib/Logger") "main"
 Docker       = require "./lib/Docker"
@@ -22,7 +22,7 @@ log.info "Booting up manager ..."
 
 options      = config.mqtt
 options      = { ...options, ...config.mqtt.extraOptions, will }
-options      = omit options, "tls" if config.development
+options      = omit options, "tls" unless every options.tls
 options      = omit options, "extraOptions"
 client       = mqtt.connect options
 
@@ -75,7 +75,7 @@ onMessage = (topic, message) ->
 		topic   = "commands/#{origin}/#{actionId}/response"
 		payload = [payload] unless isArray payload
 		params  = [
-			"#{config.mqtt.actions.baseTopic}#{options.clientId}/#{action}"
+			"#{actionOptions.baseName}/#{action}"
 			...payload
 		]
 

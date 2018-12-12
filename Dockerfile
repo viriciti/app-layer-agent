@@ -1,4 +1,4 @@
-FROM viriciti/app-layer-base-image-armhf-alpine-node
+FROM viriciti/app-layer-base-image-armhf-alpine-node:10
 
 RUN [ "cross-build-start" ]
 
@@ -8,9 +8,11 @@ WORKDIR /app
 
 # Install dependencies
 COPY package.json /app
-COPY node_modules /app/node_modules
-COPY build /app/build
+RUN npm install
+
+COPY src /app/src
 COPY config /app/config
+RUN npm run build
 
 # Configure properties
 ENV NODE_ENV production
