@@ -5,7 +5,7 @@
     "start": "nodemon src/main.coffee",
     "test": "NODE_ENV=test mocha",
     "test:watch": "NODE_ENV=test mocha -w --watch-extensions coffee",
-    "build": "coffee --output build --compile src"
+    "compile": "coffee --output build --compile src"
   },
   "repository": {
     "type": "git",

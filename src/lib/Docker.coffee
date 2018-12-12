@@ -63,9 +63,16 @@ class Docker extends EventEmitter
 	pullImage: ({ name }, cb) =>
 		log.info "Pulling image '#{name}'..."
 
-		credentials = null
-		credentials = config.docker.registryAuth.credentials if every config.docker.registryAuth.credentials
-		retryIn     = 1000 * 60
+		credentials  = null
+		credentials  = config.docker.registryAuth.credentials if every config.docker.registryAuth.credentials
+		retryIn      = 1000 * 60
+		pullInterval = setInterval =>
+			@emit "logs",
+				message: "Pulling #{name}"
+				image: name
+				type:  "action"
+				time:  Date.now()
+		, 3000
 
 		async.retry
 			times: config.docker.retry.maxAttempts
@@ -79,7 +86,7 @@ class Docker extends EventEmitter
 
 				true
 		, (next) =>
-			@dockerClient.pull name, { authconfig: credentials }, (error, stream) =>
+			@dockerClient.pull name, { authconfig: credentials }, (error, stream) ->
 				if error
 					if error.message.match /unauthorized/
 						log.error "No permission to pull #{name}"
@@ -88,23 +95,14 @@ class Docker extends EventEmitter
 
 					return next error
 
-				_pullingPingTimeout = setInterval =>
-					debug "Emitting pull logs"
-					@emit "logs",
-						message: "Pulling #{name}"
-						image: name
-						type: "action"
-						time: Date.now()
-				, 3000
-
 				pump [
 					stream
 					jsonstream2.parse()
-				], (error) ->
-					clearInterval _pullingPingTimeout
+				], next
+		, (error) ->
+			clearInterval pullInterval
 
-					next error
-		, cb
+			cb error
 
 	listImages: (cb) =>
 		debug "Listing images ..."
