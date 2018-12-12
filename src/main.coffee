@@ -31,14 +31,14 @@ docker       = new Docker
 state        = new StateManager client, docker
 appUpdater   = new AppUpdater   docker, state
 
-mqttProtocol  = if options.tls? then "mqtts" else "mqtt"
-mqttUrl       = "#{mqttProtocol}://#{options.host}:#{options.port}"
+protocol      = if options.tls? then "mqtts" else "mqtt"
+mqttUrl       = "#{protocol}://#{options.host}:#{options.port}"
 actionOptions =
-		appUpdater: appUpdater
-		baseName: "#{config.mqtt.actions.baseTopic}#{options.clientId}"
-		docker:     docker
-		rpc:        rpc
-		state:      state
+	appUpdater: appUpdater
+	baseName: "#{config.mqtt.actions.baseTopic}#{options.clientId}"
+	docker:     docker
+	rpc:        rpc
+	state:      state
 
 log.info "Connecting to #{mqttUrl} as #{options.clientId} ..."
 onConnect = ->
@@ -111,9 +111,8 @@ onClose = ->
 		.removeListener "message",   onMessage
 		.removeListener "error",     onError
 		.removeListener "reconnect", onReconnect
+		.removeListener "offline",   onOffline
 		.removeListener "close",     onClose
-
-console.log client.options
 
 client.on "connect", onConnect
 
