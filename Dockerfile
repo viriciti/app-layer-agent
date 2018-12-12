@@ -8,11 +8,9 @@ WORKDIR /app
 
 # Install dependencies
 COPY package.json /app
-RUN npm install
-
-COPY src /app/src
+COPY node_modules /app/node_modules
+COPY build /app/build
 COPY config /app/config
-RUN npm run build
 
 # Configure properties
 ENV NODE_ENV production
