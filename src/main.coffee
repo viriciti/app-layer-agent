@@ -21,8 +21,9 @@ will =
 log.info "Booting up manager ..."
 
 options      = config.mqtt
-options      = { ...options, will }
+options      = { ...options, ...config.mqtt.extraOptions, will }
 options      = omit options, "tls" if config.development
+options      = omit options, "extraOptions"
 client       = mqtt.connect options
 
 rpc          = new RPC client
@@ -111,6 +112,8 @@ onClose = ->
 		.removeListener "error",     onError
 		.removeListener "reconnect", onReconnect
 		.removeListener "close",     onClose
+
+console.log client.options
 
 client.on "connect", onConnect
 

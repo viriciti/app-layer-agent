@@ -25,7 +25,7 @@ mockDockerPull = (docker, returnStatusCode = 200) ->
 
 	docker
 
-describe.only ".Docker", ->
+describe ".Docker", ->
 	it "should list removable images", ->
 		{ allImages, runningContainers } = require "../meta/running-images"
 		toRemove                         = getRemovableImages runningContainers, allImages

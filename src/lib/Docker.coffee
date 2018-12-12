@@ -2,10 +2,6 @@
 async                                        = require "async"
 debug                                        = (require "debug") "app:Docker"
 Dockerode                                    = require "dockerode"
-jsonstream2                                  = require "jsonstream2"
-moment                                       = require "moment"
-pump                                         = require "pump"
-S                                            = require "string"
 { every, isEmpty, compact, random }          = require "lodash"
 { filterUntaggedImages, getRemovableImages } = require "@viriciti/app-layer-logic"
 config                                       = require "config"
@@ -95,10 +91,7 @@ class Docker extends EventEmitter
 
 					return next error
 
-				pump [
-					stream
-					jsonstream2.parse()
-				], next
+				stream.once "close", next
 		, (error) ->
 			clearInterval pullInterval
 
@@ -213,14 +206,6 @@ class Docker extends EventEmitter
 				cb null, @serializeContainer info
 
 	serializeContainer: (containerInfo) ->
-		started = moment(new Date(containerInfo.State.StartedAt)).fromNow()
-
-		# TODO Do we want this?
-		if not containerInfo.State.Running
-			stopped = moment(new Date(containerInfo.State.FinishedAt)).fromNow()
-		else
-			stopped = ""
-
 		Id            : containerInfo.Id
 		name          : containerInfo.Name.replace "/", ""
 		commands      : containerInfo.Config.Cmd
@@ -235,8 +220,6 @@ class Docker extends EventEmitter
 			status:   containerInfo.State.Status
 			exitCode: containerInfo.State.ExitCode
 			running:  containerInfo.State.Running
-			started:  started
-			stopped:  stopped
 		ports         : containerInfo.HostConfig.PortBindings
 		environment   : containerInfo.Config.Env
 		sizeFilesystem: containerInfo.SizeRw          # in bytes
@@ -294,7 +277,7 @@ class Docker extends EventEmitter
 				log.error "Error listing containers: #{error.message}"
 				return cb error
 
-			toRemove = containers.filter (c) -> (S c.name).contains id
+			toRemove = containers.filter (c) -> c.name.includes id
 
 			async.eachSeries toRemove, (c, cb) =>
 				(@dockerClient.getContainer c.Id).remove { force }, (error) ->
