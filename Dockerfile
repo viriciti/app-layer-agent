@@ -6,13 +6,16 @@ RUN [ "cross-build-start" ]
 RUN mkdir -p /app
 WORKDIR /app
 
-# Install dependencies
-COPY package.json /app
-RUN npm install
-
+# Build app
 COPY src /app/src
 COPY config /app/config
+COPY package.json /app
+RUN npm install --only dev
 RUN npm run build
+
+# Install production dependencies
+RUN rm -rf node_modules && \
+    npm install --production
 
 # Configure properties
 ENV NODE_ENV production
