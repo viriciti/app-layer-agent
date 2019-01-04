@@ -7,6 +7,7 @@ log          = require("./lib/Logger") "main"
 Docker       = require "./lib/Docker"
 AppUpdater   = require "./manager/AppUpdater"
 StateManager = require "./manager/StateManager"
+GroupManager = require "./manager/GroupManager"
 
 registerContainerActions = require "./actions/registerContainerActions"
 registerGroupActions     = require "./actions/registerGroupActions"
@@ -28,17 +29,19 @@ client       = mqtt.connect options
 
 rpc          = new RPC client
 docker       = new Docker
-state        = new StateManager client, docker
-appUpdater   = new AppUpdater   docker, state
+groupManager = new GroupManager
+state        = new StateManager client, docker, groupManager
+appUpdater   = new AppUpdater   docker, state, groupManager
 
 protocol      = if options.tls? then "mqtts" else "mqtt"
 mqttUrl       = "#{protocol}://#{options.host}:#{options.port}"
 actionOptions =
-	appUpdater: appUpdater
-	baseName: "#{config.mqtt.actions.baseTopic}#{options.clientId}"
-	docker:     docker
-	rpc:        rpc
-	state:      state
+	appUpdater:   appUpdater
+	baseName:     "#{config.mqtt.actions.baseTopic}#{options.clientId}"
+	docker:       docker
+	rpc:          rpc
+	state:        state
+	groupManager: groupManager
 
 log.info "Connecting to #{mqttUrl} as #{options.clientId} ..."
 onConnect = ->

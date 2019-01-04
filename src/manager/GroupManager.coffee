@@ -19,11 +19,10 @@ class GroupManager
 
 		try
 			@groups = JSON.parse await fs.readFileAsync @fileLocation, "utf8"
+			@groups = Object.values @groups unless Array.isArray @groups
 		catch
 			log.error "Error when parsing groups file, setting default groups ..."
 			await @storeGroups()
-
-		@groups = Object.values @groups unless Array.isArray @groups
 
 		@ensureGroupsOrder()
 		@groups
@@ -34,6 +33,9 @@ class GroupManager
 
 		@groups = @groups.concat name
 		await @storeGroups()
+
+	addGroups: (names) ->
+		await @addGroup name for name in names
 
 	removeGroup: (name) ->
 		return log.warn "Group '#{name}' does not exist"  unless @groups.includes name

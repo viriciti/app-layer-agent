@@ -23,6 +23,14 @@ describe.only ".GroupManager", ->
 
 		assert.deepStrictEqual groups, ["default", "beer"]
 
+	it "should be able to add multiple groups", ->
+		groupManager = new GroupManager
+
+		await groupManager.addGroups ["beer", "wine"]
+		groups = await groupManager.getGroups()
+
+		assert.deepStrictEqual groups, ["default", "beer", "wine"]
+
 	it "should not add duplicate groups", ->
 		groupManager = new GroupManager
 

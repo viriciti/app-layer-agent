@@ -5,7 +5,7 @@ debug                                     = (require "debug") "app:AppUpdater"
 log                                       = (require "../lib/Logger") "AppUpdater"
 
 class AppUpdater
-	constructor: (@docker, @state) ->
+	constructor: (@docker, @state, @groupManager) ->
 		@handleCollection = debounce @handleCollection, 2000
 		@queue            = async.queue ({ func, meta }, cb) -> func cb
 
@@ -14,10 +14,10 @@ class AppUpdater
 
 		@state.setGlobalGroups groups
 
-		groupNames = @state.getGroups()
+		groupNames = @groupManager.getGroups()
 		groups     = pickBy groups, (_, name) -> name in groupNames
 
-		@queueUpdate groups, @state.getGroups(), (error, result) ->
+		@queueUpdate groups, @groupManager.getGroups(), (error, result) ->
 			return log.error error.message if error
 			log.info "Device updated correctly!"
 
