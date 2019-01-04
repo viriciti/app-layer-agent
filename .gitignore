@@ -5,5 +5,4 @@ config/local.*
 config/local.*
 config/local-*.*
 config/local-*-*.*
-config/test.*
 package-lock.json

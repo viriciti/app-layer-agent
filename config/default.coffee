@@ -18,7 +18,7 @@ module.exports =
 			baseTopic: "actions/"
 
 	groups:
-		path: path.resolve os.homedir(), ".groups"
+		fileLocation: path.resolve os.homedir(), ".groups"
 
 	state:
 		sendStateThrottleTime:    10000
