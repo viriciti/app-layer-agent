@@ -60,9 +60,9 @@ onConnect = ->
 	registerGroupActions     actionOptions
 	registerDeviceActions    actionOptions
 
-	# support legacy actions (commands)
 	client.subscribe [
-		"commands/#{options.clientId}/+"
+		"commands/#{options.clientId}/+" # legacy support for commands
+		"devices/#{options.clientId}/groups"
 		"global/collections/+"
 	]
 
@@ -96,6 +96,8 @@ onMessage = (topic, message) ->
 					statusCode: "ERROR"
 	else if topic.startsWith "global/collections/"
 		appUpdater.handleCollection JSON.parse message.toString()
+	else if topic.startsWith "devices/"
+		console.log "groups !"
 
 onError = (error) ->
 	log.error "Could not connect to the MQTT broker: #{error.message}"
