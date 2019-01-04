@@ -14,10 +14,10 @@ class AppUpdater
 
 		@state.setGlobalGroups groups
 
-		groupNames = @groupManager.getGroups()
+		groupNames = await @groupManager.getGroups()
 		groups     = pickBy groups, (_, name) -> name in groupNames
 
-		@queueUpdate groups, @groupManager.getGroups(), (error, result) ->
+		@queueUpdate groups, groupNames, (error, result) ->
 			return log.error error.message if error
 			log.info "Device updated correctly!"
 
@@ -36,7 +36,7 @@ class AppUpdater
 		debug "Global groups are", globalGroups
 		debug "Device groups are", groups
 
-		return cb new Error "No groups"                       if isEmpty globalGroups
+		return cb new Error "No global groups"                if isEmpty globalGroups
 		return cb new Error "No default group"                unless globalGroups["default"]
 		return cb new Error "Default group must appear first" unless first(Object.keys globalGroups) is "default"
 
