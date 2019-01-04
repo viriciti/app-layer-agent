@@ -3,11 +3,12 @@ config                         = require "config"
 mqtt                           = require "mqtt"
 { omit, last, isArray, every } = require "lodash"
 
-log          = require("./lib/Logger") "main"
-Docker       = require "./lib/Docker"
-AppUpdater   = require "./manager/AppUpdater"
-StateManager = require "./manager/StateManager"
-GroupManager = require "./manager/GroupManager"
+log            = require("./lib/Logger") "main"
+Docker         = require "./lib/Docker"
+AppUpdater     = require "./manager/AppUpdater"
+StateManager   = require "./manager/StateManager"
+GroupManager   = require "./manager/GroupManager"
+waitForMessage = require "./helpers/waitForMessage"
 
 registerContainerActions = require "./actions/registerContainerActions"
 registerGroupActions     = require "./actions/registerGroupActions"
@@ -63,11 +64,17 @@ onConnect = ->
 	registerGroupActions     actionOptions
 	registerDeviceActions    actionOptions
 
-	client.subscribe [
-		"commands/#{options.clientId}/+" # legacy support for commands
-		"devices/#{options.clientId}/groups"
-		"global/collections/+"
-	]
+	# Support commands from an older App Layer Control
+	client.subscribe "commands/#{options.clientId}/+"
+
+	topics = ["devices/#{options.clientId}/groups", "global/collections/+"]
+
+	Promise
+		.all topics.map (topic) ->
+			waitForMessage client, topic
+		.then ([groups, collection]) ->
+			await groupManager.syncGroups groups
+			appUpdater.handleCollection collection
 
 onMessage = (topic, message) ->
 	if topic.startsWith "commands/#{options.clientId}"
@@ -97,10 +104,6 @@ onMessage = (topic, message) ->
 					action:     action
 					data:       error
 					statusCode: "ERROR"
-	else if topic.startsWith "global/collections/"
-		appUpdater.handleCollection JSON.parse message.toString()
-	else if topic.startsWith "devices/"
-		console.log "groups !"
 
 onError = (error) ->
 	log.error "Could not connect to the MQTT broker: #{error.message}"

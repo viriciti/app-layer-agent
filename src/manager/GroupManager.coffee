@@ -11,6 +11,12 @@ class GroupManager
 		@groups       = ["default"]
 		@fileLocation = config.groups.fileLocation
 
+	syncGroups: (groups) ->
+		@groups = groups
+		@ensureGroupsOrder()
+
+		await @storeGroups
+
 	storeGroups: ->
 		await fs.writeFileAsync @fileLocation, JSON.stringify @groups
 
