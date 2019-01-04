@@ -8,7 +8,7 @@ fs  = promisifyAll fs
 
 class GroupManager
 	constructor: ->
-		@groups       = ["default"]
+		@groups       = []
 		@fileLocation = config.groups.fileLocation
 
 	syncGroups: (groups) ->

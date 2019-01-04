@@ -67,14 +67,12 @@ onConnect = ->
 	# Support commands from an older App Layer Control
 	client.subscribe "commands/#{options.clientId}/+"
 
-	topics = ["devices/#{options.clientId}/groups", "global/collections/+"]
+	topics               = ["devices/#{options.clientId}/groups", "global/collections/+"]
+	topicPromises        = topics.map (topic) -> waitForMessage client, topic
+	[groups, collection] = await Promise.all topicPromises
 
-	Promise
-		.all topics.map (topic) ->
-			waitForMessage client, topic
-		.then ([groups, collection]) ->
-			await groupManager.syncGroups groups
-			appUpdater.handleCollection collection
+	await groupManager.syncGroups groups
+	appUpdater.handleCollection collection
 
 onMessage = (topic, message) ->
 	if topic.startsWith "commands/#{options.clientId}"
