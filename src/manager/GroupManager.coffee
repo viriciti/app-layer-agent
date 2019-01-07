@@ -13,6 +13,7 @@ class GroupManager
 
 	syncGroups: (groups) ->
 		@groups = groups
+		@groups = ["default", @groups...]
 		@ensureGroupsOrder()
 
 		await @storeGroups

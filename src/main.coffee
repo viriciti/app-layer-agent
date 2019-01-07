@@ -1,14 +1,13 @@
-RPC                            = require "mqtt-json-rpc"
-config                         = require "config"
-mqtt                           = require "mqtt"
-{ omit, last, isArray, every } = require "lodash"
+RPC                                  = require "mqtt-json-rpc"
+config                               = require "config"
+mqtt                                 = require "mqtt"
+{ omit, last, isArray, every, once } = require "lodash"
 
 log            = require("./lib/Logger") "main"
 Docker         = require "./lib/Docker"
 AppUpdater     = require "./manager/AppUpdater"
 StateManager   = require "./manager/StateManager"
 GroupManager   = require "./manager/GroupManager"
-waitForMessage = require "./helpers/waitForMessage"
 
 registerContainerActions = require "./actions/registerContainerActions"
 registerGroupActions     = require "./actions/registerGroupActions"
@@ -44,6 +43,9 @@ actionOptions =
 	state:        state
 	groupManager: groupManager
 
+subscribeToCollections = once ->
+	client.subscribe "global/collections/+"
+
 log.info "Connecting to #{mqttUrl} as #{options.clientId} ..."
 onConnect = ->
 	log.info "Connected to the MQTT broker"
@@ -64,15 +66,11 @@ onConnect = ->
 	registerGroupActions     actionOptions
 	registerDeviceActions    actionOptions
 
-	# Support commands from an older App Layer Control
-	client.subscribe "commands/#{options.clientId}/+"
-
-	topics               = ["devices/#{options.clientId}/groups", "global/collections/+"]
-	topicPromises        = topics.map (topic) -> waitForMessage client, topic
-	[groups, collection] = await Promise.all topicPromises
-
-	await groupManager.syncGroups groups
-	appUpdater.handleCollection collection
+	client.subscribe [
+		# Support commands from an older App Layer Control
+		"commands/#{options.clientId}/+"
+		"devices/#{options.clientId}/groups"
+	]
 
 onMessage = (topic, message) ->
 	if topic.startsWith "commands/#{options.clientId}"
@@ -102,6 +100,11 @@ onMessage = (topic, message) ->
 					action:     action
 					data:       error
 					statusCode: "ERROR"
+	else if topic is "devices/#{options.clientId}/groups"
+		await groupManager.syncGroups JSON.parse message.toString()
+		subscribeToCollections()
+	else if topic.startsWith "global/collections"
+		appUpdater.handleCollection JSON.parse message.toString()
 
 onError = (error) ->
 	log.error "Could not connect to the MQTT broker: #{error.message}"
