@@ -85,21 +85,18 @@ onMessage = (topic, message) ->
 			...payload
 		]
 
-		rpc
-			.call
-			.apply rpc, params
-			.then (result) ->
-				client.publish topic, JSON.stringify
-					action:      action
-					data:        result
-					statusCode: "OK"
-			.catch (error) ->
-				log.error error.message
+		try
+			client.publish topic, JSON.stringify
+				action:     action
+				data:       await rpc.call [rpc, params]...
+				statusCode: "OK"
+		catch error
+			log.error error.message
 
-				client.publish topic, JSON.stringify
-					action:     action
-					data:       error
-					statusCode: "ERROR"
+			client.publish topic, JSON.stringify
+				action:     action
+				data:       error
+				statusCode: "ERROR"
 	else if topic is "devices/#{options.clientId}/groups"
 		await groupManager.syncGroups JSON.parse message.toString()
 		subscribeToCollections()
