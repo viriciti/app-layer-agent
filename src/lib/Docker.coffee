@@ -270,7 +270,6 @@ class Docker extends EventEmitter
 	removeContainer: ({ id, force = false }, cb) ->
 		return cb() unless config.docker.container.allowRemoval
 
-		console.log "remove ?"
 		log.info "Removing container '#{id}'"
 
 		@listContainers (error, containers) =>
