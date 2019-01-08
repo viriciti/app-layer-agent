@@ -1,6 +1,6 @@
 {
   "name": "app-layer-agent",
-  "version": "1.17.0-1",
+  "version": "1.17.0",
   "scripts": {
     "start": "nodemon src/main.coffee",
     "test": "NODE_ENV=test mocha",
