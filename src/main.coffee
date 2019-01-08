@@ -10,7 +10,6 @@ StateManager   = require "./manager/StateManager"
 GroupManager   = require "./manager/GroupManager"
 
 registerContainerActions = require "./actions/registerContainerActions"
-registerGroupActions     = require "./actions/registerGroupActions"
 registerImageActions     = require "./actions/registerImageActions"
 registerDeviceActions    = require "./actions/registerDeviceActions"
 
@@ -46,6 +45,10 @@ actionOptions =
 subscribeToCollections = once ->
 	client.subscribe "global/collections/+"
 
+sendInitialState = once ->
+	state.sendStateToMqtt()
+	state.sendNsState()
+
 log.info "Connecting to #{mqttUrl} as #{options.clientId} ..."
 onConnect = ->
 	log.info "Connected to the MQTT broker"
@@ -58,12 +61,9 @@ onConnect = ->
 		.on "close",     onClose
 
 	state.notifyOnlineStatus()
-	state.throttledSendState()
-	state.sendNsState()
 
 	registerContainerActions actionOptions
 	registerImageActions     actionOptions
-	registerGroupActions     actionOptions
 	registerDeviceActions    actionOptions
 
 	client.subscribe [
@@ -98,8 +98,9 @@ onMessage = (topic, message) ->
 				data:       error
 				statusCode: "ERROR"
 	else if topic is "devices/#{options.clientId}/groups"
-		await groupManager.syncGroups JSON.parse message.toString()
+		groupManager.updateGroups JSON.parse message.toString()
 		subscribeToCollections()
+		sendInitialState()
 	else if topic.startsWith "global/collections"
 		appUpdater.handleCollection JSON.parse message.toString()
 

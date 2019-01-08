@@ -170,7 +170,7 @@ class StateManager
 				log.error "Error generating state object: #{error.message}"
 				return cb error
 
-			groups     = await @groupManager.getGroups()
+			groups     = @groupManager.getGroups()
 			systemInfo = Object.assign {},
 				systemInfo
 				getIpAddresses()
