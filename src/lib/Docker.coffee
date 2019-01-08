@@ -13,7 +13,7 @@ class Docker extends EventEmitter
 	constructor: ->
 		super()
 
-		log.warn "Container removal is disabled" unless config.docker.allowContainerRemoval
+		log.warn "Container removal is disabled" unless config.docker.container.allowRemoval
 
 		@dockerClient = new Dockerode socketPath: config.docker.socketPath
 		@logsParser   = new DockerLogsParser @
@@ -268,8 +268,9 @@ class Docker extends EventEmitter
 				cb null, "Container #{id} restarted correctly"
 
 	removeContainer: ({ id, force = false }, cb) ->
-		return cb() unless config.docker.allowContainerRemoval
+		return cb() unless config.docker.container.allowRemoval
 
+		console.log "remove ?"
 		log.info "Removing container '#{id}'"
 
 		@listContainers (error, containers) =>
@@ -277,7 +278,9 @@ class Docker extends EventEmitter
 				log.error "Error listing containers: #{error.message}"
 				return cb error
 
-			toRemove = containers.filter (c) -> c.name.includes id
+			toRemove = containers.filter (c) ->
+				c.name not in config.docker.container.whitelist and
+				c.name.includes id
 
 			async.eachSeries toRemove, (c, cb) =>
 				@dockerClient.getContainer(c.Id).remove { force }, (error) ->
