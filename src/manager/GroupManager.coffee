@@ -8,6 +8,8 @@ class GroupManager
 		@groups = @readGroupsFromFile()
 
 	readGroupsFromFile: ->
+		return [] unless config.groups?.fileLocation
+
 		try
 			fs.accessSync config.groups.fileLocation
 			groups = JSON.parse fs.readFileSync config.groups.fileLocation, "utf8"

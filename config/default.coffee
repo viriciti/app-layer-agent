@@ -21,8 +21,10 @@ module.exports =
 		sendAppStateThrottleTime: 3000
 
 	docker:
-		allowContainerRemoval: true
 		socketPath: "/var/run/docker.sock"
+		container:
+			allowRemoval: true
+			whitelist:    ["app-layer-agent"]
 		retry:
 			minWaitingTime: 5 * 1000 * 60  # 5 minutes
 			maxWaitingTime: 15 * 1000 * 60 # 15 minutes

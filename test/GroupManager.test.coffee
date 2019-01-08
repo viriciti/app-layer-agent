@@ -5,7 +5,7 @@ fs     = require "fs"
 GroupManager = require "../src/manager/GroupManager"
 
 describe ".GroupManager", ->
-	it "should ensure the order of groups is correct", ->
+	it "should be able to update groups", ->
 		groupManager = new GroupManager
 
 		groupManager.updateGroups ["beer", "default", "a"]
