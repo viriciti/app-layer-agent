@@ -5,7 +5,7 @@ debug                                     = (require "debug") "app:AppUpdater"
 log                                       = (require "../lib/Logger") "AppUpdater"
 
 class AppUpdater
-	constructor: (@docker, @state) ->
+	constructor: (@docker, @state, @groupManager) ->
 		@handleCollection = debounce @handleCollection, 2000
 		@queue            = async.queue ({ func, meta }, cb) -> func cb
 
@@ -14,10 +14,10 @@ class AppUpdater
 
 		@state.setGlobalGroups groups
 
-		groupNames = @state.getGroups()
+		groupNames = await @groupManager.getGroups()
 		groups     = pickBy groups, (_, name) -> name in groupNames
 
-		@queueUpdate groups, @state.getGroups(), (error, result) ->
+		@queueUpdate groups, groupNames, (error, result) ->
 			return log.error error.message if error
 			log.info "Device updated correctly!"
 
@@ -36,7 +36,7 @@ class AppUpdater
 		debug "Global groups are", globalGroups
 		debug "Device groups are", groups
 
-		return cb new Error "No groups"                       if isEmpty globalGroups
+		return cb new Error "No global groups"                if isEmpty globalGroups
 		return cb new Error "No default group"                unless globalGroups["default"]
 		return cb new Error "Default group must appear first" unless first(Object.keys globalGroups) is "default"
 

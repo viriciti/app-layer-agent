@@ -1,5 +1,4 @@
-os    = require "os"
-path  = require "path"
+os = require "os"
 
 module.exports =
 	mqtt:
@@ -16,9 +15,6 @@ module.exports =
 			rejectUnauthorized: true
 		actions:
 			baseTopic: "actions/"
-
-	groups:
-		path: path.resolve os.homedir(), ".groups"
 
 	state:
 		sendStateThrottleTime:    10000

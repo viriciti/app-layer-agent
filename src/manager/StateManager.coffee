@@ -9,7 +9,7 @@ getIpAddresses = require "../helpers/getIPAddresses"
 log            = (require "../lib/Logger") "StateManager"
 
 class StateManager
-	constructor: (@socket, @docker) ->
+	constructor: (@socket, @docker, @groupManager) ->
 		@clientId           = config.mqtt.clientId
 		@localState         = globalGroups: {}
 		@nsState            = {}
@@ -170,7 +170,7 @@ class StateManager
 				log.error "Error generating state object: #{error.message}"
 				return cb error
 
-			groups     = @getGroups()
+			groups     = @groupManager.getGroups()
 			systemInfo = Object.assign {},
 				systemInfo
 				getIpAddresses()

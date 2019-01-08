@@ -17,8 +17,7 @@
     "coffeescript": "^2.3.2",
     "mocha": "^5.2.0",
     "mockery": "^2.1.0",
-    "nodemon": "^1.18.7",
-    "spy": "^1.0.0"
+    "nodemon": "^1.18.7"
   },
   "dependencies": {
     "@viriciti/app-layer-logic": "^1.2.3",
@@ -29,6 +28,7 @@
     "lodash": "^4.17.11",
     "mqtt": "^2.18.8",
     "mqtt-json-rpc": "^0.9.20",
+    "mqtt-pattern": "^1.2.0",
     "semver": "^5.5.0",
     "winston": "^2.4.2"
   }
