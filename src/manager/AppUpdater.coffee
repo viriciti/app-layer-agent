@@ -1,11 +1,11 @@
-{ isEmpty, pickBy, size, debounce, map } = require "lodash"
-async                                    = require "async"
-debug                                    = (require "debug") "app:AppUpdater"
-{ createGroupsMixin, getAppsToChange }   = require "@viriciti/app-layer-logic"
-log                                      = (require "../lib/Logger") "AppUpdater"
+{ isEmpty, pickBy, first, debounce, map } = require "lodash"
+async                                     = require "async"
+debug                                     = (require "debug") "app:AppUpdater"
+{ createGroupsMixin, getAppsToChange }    = require "@viriciti/app-layer-logic"
+log                                       = (require "../lib/Logger") "AppUpdater"
 
 class AppUpdater
-	constructor: (@docker, @state) ->
+	constructor: (@docker, @state, @groupManager) ->
 		@handleCollection = debounce @handleCollection, 2000
 		@queue            = async.queue ({ func, meta }, cb) -> func cb
 
@@ -14,10 +14,10 @@ class AppUpdater
 
 		@state.setGlobalGroups groups
 
-		groupNames = Object.values @state.getGroups()
+		groupNames = await @groupManager.getGroups()
 		groups     = pickBy groups, (_, name) -> name in groupNames
 
-		@queueUpdate groups, @state.getGroups(), (error, result) ->
+		@queueUpdate groups, groupNames, (error, result) ->
 			return log.error error.message if error
 			log.info "Device updated correctly!"
 
@@ -36,11 +36,9 @@ class AppUpdater
 		debug "Global groups are", globalGroups
 		debug "Device groups are", groups
 
-		return cb new Error "No groups" if isEmpty globalGroups
-
-		if size(globalGroups) is 1 and not globalGroups["default"]
-			return cb new Error "Size of global groups is 1, but the group is not default.
-				Global groups are misconfigured!"
+		return cb new Error "No global groups"                if isEmpty globalGroups
+		return cb new Error "No default group"                unless globalGroups["default"]
+		return cb new Error "Default group must appear first" unless first(Object.keys globalGroups) is "default"
 
 		async.waterfall [
 			(next) =>
@@ -122,21 +120,7 @@ class AppUpdater
 		currentStep > endStep
 
 	installApp: (appConfig, cb) ->
-		containerInfo =
-			name:         appConfig.containerName
-			AttachStdin:  not appConfig.detached
-			AttachStdout: not appConfig.detached
-			AttachStderr: not appConfig.detached
-			Env:          appConfig.environment
-			Cmd:          appConfig.entryCommand
-			Image:        appConfig.fromImage
-			Labels:       appConfig.labels #NOTE https://docs.docker.com/config/labels-custom-metadata/#value-guidelines
-			HostConfig:
-				Binds:         appConfig.mounts
-				NetworkMode:   appConfig.networkMode
-				Privileged:    not not appConfig.privileged
-				RestartPolicy: Name: appConfig.restartPolicy # why 0?
-				PortBindings:  appConfig.ports
+		containerInfo = @normalizeAppConfiguration appConfig
 
 		async.series [
 			(next) =>
@@ -144,7 +128,8 @@ class AppUpdater
 
 				@docker.pullImage name: containerInfo.Image, (error) ->
 					return next error if error
-					log.info "Image #{containerInfo.Image} pulled correctly."
+
+					log.info "Image #{containerInfo.Image} pulled correctly"
 					next()
 			(next) =>
 				return next() if @isPastLastInstallStep "Clean", appConfig.lastInstallStep
@@ -165,5 +150,30 @@ class AppUpdater
 
 			log.info "Application #{containerInfo.name} installed correctly"
 			cb()
+
+	normalizeAppConfiguration: (appConfiguration) ->
+		name:         appConfiguration.containerName
+		AttachStdin:  not appConfiguration.detached
+		AttachStdout: not appConfiguration.detached
+		AttachStderr: not appConfiguration.detached
+		Env:          appConfiguration.environment
+		Cmd:          appConfiguration.entryCommand
+		Image:        appConfiguration.fromImage
+		Labels:       appConfiguration.labels #NOTE https://docs.docker.com/config/labels-custom-metadata/#value-guidelines
+		HostConfig:
+			Mounts:        @bindsToMounts appConfiguration.mounts
+			NetworkMode:   appConfiguration.networkMode
+			Privileged:    not not appConfiguration.privileged
+			RestartPolicy: Name: appConfiguration.restartPolicy
+			PortBindings:  appConfiguration.ports
+
+	bindsToMounts: (binds) ->
+		binds.map (bind) ->
+			[source, target, ro] = bind.split ":"
+
+			ReadOnly: not not ro
+			Source:   source
+			Target:   target
+			Type:     "bind"
 
 module.exports = AppUpdater

@@ -1,9 +1,10 @@
 {
   "name": "app-layer-agent",
-  "version": "1.16.0",
+  "version": "1.17.0",
   "scripts": {
     "start": "nodemon src/main.coffee",
-    "test": "./bin/coffeetape test/*.test.coffee | tap-summary",
+    "test": "NODE_ENV=test mocha",
+    "test:watch": "NODE_ENV=test mocha -w --watch-extensions coffee",
     "build": "coffee --output build --compile src"
   },
   "repository": {
@@ -13,32 +14,22 @@
   "license": "GPL-3.0",
   "devDependencies": {
     "coffeescope2": "^0.5.1",
-    "gulp": "^3.9.1",
-    "gulp-shell": "^0.6.5",
-    "leaked-handles": "^5.2.0",
-    "nodemon": "^1.18.7",
-    "rsync": "^0.6.1",
-    "run-sequence": "^2.2.1",
-    "supports-color": "^5.4.0",
-    "tap-spec": "^4.1.1",
-    "tap-summary": "^4.0.0",
-    "tape": "^4.9.0"
+    "coffeescript": "^2.3.2",
+    "mocha": "^5.2.0",
+    "mockery": "^2.1.0",
+    "nodemon": "^1.18.7"
   },
   "dependencies": {
     "@viriciti/app-layer-logic": "^1.2.3",
     "async": "^2.6.0",
-    "coffeescript": "^2.3.2",
     "config": "^1.30.0",
     "debug": "^3.1.0",
     "dockerode": "^2.5.5",
-    "jsonstream2": "^1.1.1",
     "lodash": "^4.17.11",
-    "moment": "^2.22.1",
     "mqtt": "^2.18.8",
     "mqtt-json-rpc": "^0.9.20",
-    "pump": "^3.0.0",
+    "mqtt-pattern": "^1.2.0",
     "semver": "^5.5.0",
-    "string": "^3.3.3",
     "winston": "^2.4.2"
   }
 }

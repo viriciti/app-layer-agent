@@ -1,5 +1,4 @@
-os    = require "os"
-path  = require "path"
+os = require "os"
 
 module.exports =
 	mqtt:
@@ -10,24 +9,26 @@ module.exports =
 			key:  process.env.TLS_KEY
 			cert: process.env.TLS_CERT
 			ca:   process.env.TLS_CA
-		extraOpts:
+		extraOptions:
 			keepalive:          60
 			reconnectPeriod:    5000
 			rejectUnauthorized: true
 		actions:
-			basePath: "actions/"
-
-	groups:
-		path: path.join os.homedir(), ".groups"
+			baseTopic: "actions/"
 
 	state:
 		sendStateThrottleTime:    10000
 		sendAppStateThrottleTime: 3000
 
 	docker:
+		allowContainerRemoval: true
 		socketPath: "/var/run/docker.sock"
-		maxRetries: 5
-		registry_auth:
+		retry:
+			minWaitingTime: 5 * 1000 * 60  # 5 minutes
+			maxWaitingTime: 15 * 1000 * 60 # 15 minutes
+			maxAttempts:    10
+			errorCodes:     [502, 503, 504]
+		registryAuth:
 			credentials:
 				username:      process.env.GITLAB_USER_NAME
 				password:      process.env.GITLAB_USER_ACCESS_TOKEN

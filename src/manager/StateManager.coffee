@@ -9,7 +9,7 @@ getIpAddresses = require "../helpers/getIPAddresses"
 log            = (require "../lib/Logger") "StateManager"
 
 class StateManager
-	constructor: (@socket, @docker) ->
+	constructor: (@socket, @docker, @groupManager) ->
 		@clientId           = config.mqtt.clientId
 		@localState         = globalGroups: {}
 		@nsState            = {}
@@ -23,7 +23,6 @@ class StateManager
 		message = options.message
 		message = JSON.stringify message unless _.isString message
 
-		debug "Sending data to #{topic}"
 		@socket.publish topic, message, options.opts, cb
 
 	sendStateToMqtt: (cb) =>
@@ -95,7 +94,7 @@ class StateManager
 
 			log.warn "#{key}: Buffer.byteLength = #{byteLength}" if byteLength > 1024
 
-			@throttledPublishes[key] or= _.throttle @publish, config.sendStateThrottleTime
+			@throttledPublishes[key] or= _.throttle @publish, config.state.sendStateThrottleTime
 			@throttledPublishes[key]
 				topic:   "nsState/#{key}"
 				message: stringified
@@ -106,19 +105,25 @@ class StateManager
 			next()
 		, cb
 
-	sendNsState: (cb) ->
-		async.eachOf @nsState, (val, key, next) =>
+	sendNsState: (nsState, cb) ->
+		if _.isFunction nsState
+			cb      = nsState
+			nsState = @nsState
+		else
+			nsState or= @nsState
+
+		async.eachOf nsState, (val, key, next) =>
 			@publish
 				topic:   "nsState/#{key}"
 				message: val
 				opts:    retain: true
 			, next
-		, (error) =>
+		, (error) ->
 			if error
 				log.error "Error publishing namespaced state: #{error.message}"
 				return cb? error
 
-			log.info "Namespaced state published for #{Object.keys(@nsState).join ", "}"
+			log.info "Namespaced state published for #{Object.keys(nsState).join ", "}"
 			cb?()
 
 	getGroups: ->
@@ -127,23 +132,26 @@ class StateManager
 			log.info "Groups configured with default configuration"
 
 		try
-			groups = JSON.parse (fs.readFileSync config.groups.path).toString()
+			groups = JSON.parse fs.readFileSync config.groups.path, "utf8"
 		catch
 			log.error "Error while parsing groups, setting default configuration ..."
 			@setDefaultGroups()
 
-		groups = Object.assign {}, groups, 1: "default"
-		debug "Groups: #{Object.values(groups).join ', '} (from #{config.groups.path})"
+		groups = Object.values groups unless _.isArray groups
+		groups = _.without groups, "default"
+		groups = ["default", ...groups]
+
+		debug "Groups: #{groups.join ', '} (from #{config.groups.path})"
 		groups
 
 	setGroups: (groups) ->
-		log.info "Setting groups to #{Object.values(groups).join ', '}"
+		log.info "Setting groups to #{groups.join ', '}"
 
 		fs.writeFileSync config.groups.path, JSON.stringify groups
 		@throttledSendState()
 
 	setDefaultGroups: ->
-		@setGroups 1: "default"
+		@setGroups ["default"]
 
 	setGlobalGroups: (globalGroups) ->
 		debug "Global groups: #{Object.values(globalGroups).join ", "}"
@@ -151,12 +159,6 @@ class StateManager
 
 	getGlobalGroups: ->
 		@localState.globalGroups
-
-	updateFinishedQueueList: (finishedTask) ->
-		oldList = @nsState["finishedQueueList"] or []
-		newList = [finishedTask].concat oldList.slice 0, 9 # only keep 10
-
-		@publishNamespacedState finishedQueueList: newList
 
 	generateStateObject: (cb) ->
 		async.parallel
@@ -168,7 +170,7 @@ class StateManager
 				log.error "Error generating state object: #{error.message}"
 				return cb error
 
-			groups     = Object.values @getGroups()
+			groups     = @groupManager.getGroups()
 			systemInfo = Object.assign {},
 				systemInfo
 				getIpAddresses()

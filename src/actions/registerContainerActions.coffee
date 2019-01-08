@@ -1,9 +1,9 @@
 debug         = (require "debug") "app:registerContainerActions"
 { promisify } = require "util"
 
-registerMethod = require "../helpers/registerMethod"
+registerFunction = require "../helpers/registerFunction"
 
-module.exports = ({ baseMethod, rpc, docker }) ->
+module.exports = ({ baseName, rpc, docker }) ->
 	onRemoveContainer = ({ id, force = true }) ->
 		debug "Removing container '#{id}'"
 		await promisify(docker.removeContainer.bind docker) { id, force }
@@ -16,6 +16,6 @@ module.exports = ({ baseMethod, rpc, docker }) ->
 		debug "Fetching logs for container '#{id}'"
 		await promisify(docker.getContainerLogs.bind docker) { id }
 
-	registerMethod rpc, "#{baseMethod}/removeContainer",  onRemoveContainer
-	registerMethod rpc, "#{baseMethod}/restartContainer", onRestartContainer
-	registerMethod rpc, "#{baseMethod}/getContainerLogs", onFetchContainerLogs
+	registerFunction rpc, "#{baseName}/removeContainer",  onRemoveContainer
+	registerFunction rpc, "#{baseName}/restartContainer", onRestartContainer
+	registerFunction rpc, "#{baseName}/getContainerLogs", onFetchContainerLogs
