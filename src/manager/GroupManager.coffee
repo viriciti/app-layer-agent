@@ -20,7 +20,8 @@ class GroupManager
 			[]
 
 	updateGroups: (groups) ->
-		@groups = without groups, "default"
+		@groups = groups
+		@groups = without @groups, "default"
 		@groups = ["default", @groups...]
 
 	getGroups: ->
