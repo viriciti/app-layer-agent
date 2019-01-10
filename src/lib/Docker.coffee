@@ -277,9 +277,7 @@ class Docker extends EventEmitter
 				log.error "Error listing containers: #{error.message}"
 				return cb error
 
-			toRemove = containers.filter (c) ->
-				c.name not in config.docker.container.whitelist and
-				c.name.includes id
+			toRemove = containers.filter (c) -> c.name.includes id
 
 			async.eachSeries toRemove, (c, cb) =>
 				@dockerClient.getContainer(c.Id).remove { force }, (error) ->
