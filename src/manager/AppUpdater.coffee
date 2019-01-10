@@ -3,6 +3,7 @@ async                                     = require "async"
 debug                                     = (require "debug") "app:AppUpdater"
 { createGroupsMixin, getAppsToChange }    = require "@viriciti/app-layer-logic"
 log                                       = (require "../lib/Logger") "AppUpdater"
+config                                    = require "config"
 
 class AppUpdater
 	constructor: (@docker, @state, @groupManager) ->
@@ -46,6 +47,8 @@ class AppUpdater
 					return next error if error
 
 					currentApps = containers.reduce (keyedContainers, container) ->
+						return keyedContainers if container.name in config.docker.container.whitelist
+
 						{ keyedContainers..., [container.name]: container }
 					, {}
 					extendedGroups = createGroupsMixin globalGroups,   groups
