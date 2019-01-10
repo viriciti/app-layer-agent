@@ -225,7 +225,6 @@ class Docker extends EventEmitter
 		sizeFilesystem: containerInfo.SizeRw          # in bytes
 		sizeRootFilesystem : containerInfo.SizeRootFs # in bytes
 		mounts        : containerInfo.Mounts.filter (mount) ->
-			console.log mount
 			hostPath: mount.Source, containerPath: mount.Destination, mode: mount.Mode
 		labels: containerInfo.Config.Labels
 
