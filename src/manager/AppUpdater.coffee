@@ -161,7 +161,7 @@ class AppUpdater
 		Image:        appConfiguration.fromImage
 		Labels:       appConfiguration.labels #NOTE https://docs.docker.com/config/labels-custom-metadata/#value-guidelines
 		HostConfig:
-			Binds:         appConfiguration.mounts
+			Mounts:        @bindsToMounts appConfiguration.mounts
 			NetworkMode:   appConfiguration.networkMode
 			Privileged:    not not appConfiguration.privileged
 			RestartPolicy: Name: appConfiguration.restartPolicy
