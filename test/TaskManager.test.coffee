@@ -2,7 +2,9 @@ assert     = require "assert"
 mosca      = require "mosca"
 mqtt       = require "mqtt"
 { random } = require "lodash"
+RPC        = require "mqtt-json-rpc"
 
+registerFunction = require "../src/helpers/registerFunction"
 
 TaskManager = require "../src/manager/TaskManager"
 thenable    = (delay) -> ->
@@ -11,6 +13,9 @@ thenable    = (delay) -> ->
 
 		setTimeout resolve, delay
 
+resolver = ->
+	Promise.resolve()
+
 describe ".TaskManager", ->
 	port   = random 5000, 10000
 	server = null
@@ -18,7 +23,7 @@ describe ".TaskManager", ->
 
 	before (done) ->
 		server = new mosca.Server port: port
-		client = mqtt.connect port: port
+		client = mqtt.connect port: port, clientId: "app-layer-agent-tester"
 
 		client.once "connect", -> done()
 
@@ -73,3 +78,16 @@ describe ".TaskManager", ->
 				fn:     thenable 1000
 
 		assert.deepStrictEqual manager.getRemainingTasks(), tasks
+
+	it "should add tasks from rpc", (done) ->
+		rpc     = new RPC client
+		manager = new TaskManager client
+
+		manager.once "added", ({ name, params }) ->
+			assert.deepStrictEqual params, [test: true]
+			assert.equal name, "test"
+			done()
+
+		registerFunction manager, "test", resolver
+
+		rpc.notify "test", test: true
