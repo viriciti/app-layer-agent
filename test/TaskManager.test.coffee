@@ -11,7 +11,7 @@ thenable    = (delay) -> ->
 
 		setTimeout resolve, delay
 
-describe.only ".TaskManager", ->
+describe ".TaskManager", ->
 	port   = random 5000, 10000
 	server = null
 	client = null
