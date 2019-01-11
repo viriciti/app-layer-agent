@@ -1,13 +1,14 @@
-RPC                                  = require "mqtt-json-rpc"
+
 config                               = require "config"
 mqtt                                 = require "mqtt"
 { omit, last, isArray, every, once } = require "lodash"
 
-log            = require("./lib/Logger") "main"
-Docker         = require "./lib/Docker"
-AppUpdater     = require "./manager/AppUpdater"
-StateManager   = require "./manager/StateManager"
-GroupManager   = require "./manager/GroupManager"
+log          = require("./lib/Logger") "main"
+Docker       = require "./lib/Docker"
+AppUpdater   = require "./manager/AppUpdater"
+StateManager = require "./manager/StateManager"
+GroupManager = require "./manager/GroupManager"
+TaskManager  = require "./manager/TaskManager"
 
 registerContainerActions = require "./actions/registerContainerActions"
 registerImageActions     = require "./actions/registerImageActions"
@@ -26,7 +27,7 @@ options      = omit options, "tls" unless every options.tls
 options      = omit options, "extraOptions"
 client       = mqtt.connect options
 
-rpc          = new RPC client
+rpc          = new TaskManager client
 docker       = new Docker
 groupManager = new GroupManager
 state        = new StateManager client, docker, groupManager
@@ -99,6 +100,8 @@ onMessage = (topic, message) ->
 				statusCode: "ERROR"
 	else if topic is "devices/#{options.clientId}/groups"
 		groupManager.updateGroups JSON.parse message.toString()
+		# Only subscribe to collections after we have groups
+		# to keep the order of groups -> collections in check
 		subscribeToCollections()
 		sendInitialState()
 	else if topic.startsWith "global/collections"

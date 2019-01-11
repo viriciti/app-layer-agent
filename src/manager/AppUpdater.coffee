@@ -15,7 +15,7 @@ class AppUpdater
 
 		@state.setGlobalGroups groups
 
-		groupNames = await @groupManager.getGroups()
+		groupNames = @groupManager.getGroups()
 		groups     = pickBy groups, (_, name) -> name in groupNames
 
 		@queueUpdate groups, groupNames, (error, result) ->
