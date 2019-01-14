@@ -9,4 +9,9 @@ module.exports = ({ baseName, rpc, state }) ->
 		state.throttledSendState()
 		state.sendNsState()
 
-	registerFunction rpc, "#{baseName}/refreshState", onRefreshState
+		Promise.resolve()
+
+	registerFunction
+		fn:   onRefreshState
+		name: "#{baseName}/refreshState"
+		rpc:  rpc

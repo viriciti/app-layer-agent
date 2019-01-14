@@ -1,6 +1,6 @@
 debug = (require "debug") "app:helpers:registerFunction"
 
-module.exports = (rpc, name, fn) ->
+module.exports = ({ rpc, name, fn, sync = false }) ->
 	# remove duplicate forward slashes
 	name = name.replace /\/{2,}/g, "/"
 
@@ -9,9 +9,12 @@ module.exports = (rpc, name, fn) ->
 	rpc.register name, (...params) ->
 		debug "Executing function '#{name}' ..."
 
-		rpc.addTask
-			name:   name
-			fn:     fn
-			params: params
+		if sync
+			fn ...params
+		else
+			rpc.addTask
+				name:   name
+				fn:     fn
+				params: params
 
-		status: "ACK"
+			status: "ACK"

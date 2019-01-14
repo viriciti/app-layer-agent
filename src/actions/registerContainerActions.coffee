@@ -16,6 +16,18 @@ module.exports = ({ baseName, rpc, docker }) ->
 		debug "Fetching logs for container '#{id}'"
 		await promisify(docker.getContainerLogs.bind docker) { id }
 
-	registerFunction rpc, "#{baseName}/removeContainer",  onRemoveContainer
-	registerFunction rpc, "#{baseName}/restartContainer", onRestartContainer
-	registerFunction rpc, "#{baseName}/getContainerLogs", onFetchContainerLogs
+	registerFunction
+		fn:   onRemoveContainer
+		name: "#{baseName}/removeContainer"
+		rpc:  rpc
+
+	registerFunction
+		fn:   onRestartContainer
+		name: "#{baseName}/restartContainer"
+		rpc:  rpc
+
+	registerFunction
+		fn:   onFetchContainerLogs
+		name: "#{baseName}/getContainerLogs"
+		rpc:  rpc
+		sync: true

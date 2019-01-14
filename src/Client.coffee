@@ -40,7 +40,7 @@ class Client extends EventEmitter
 			expanded = @expandTopic topic
 			return unless MQTTPattern.matches expanded, packet.topic
 
-			@emit topic, expanded, payload
+			@emit topic, packet.topic, payload
 
 	onError: (error) ->
 		log.error "Could not connect to the MQTT broker: #{error.message}"

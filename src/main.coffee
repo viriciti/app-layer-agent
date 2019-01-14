@@ -1,13 +1,13 @@
-RPC               = require "mqtt-json-rpc"
 config            = require "config"
 { last, isArray } = require "lodash"
 
-log            = require("./lib/Logger") "main"
-Docker         = require "./lib/Docker"
-AppUpdater     = require "./manager/AppUpdater"
-StateManager   = require "./manager/StateManager"
-GroupManager   = require "./manager/GroupManager"
-Client         = require "./Client"
+log          = require("./lib/Logger") "main"
+Docker       = require "./lib/Docker"
+AppUpdater   = require "./manager/AppUpdater"
+StateManager = require "./manager/StateManager"
+GroupManager = require "./manager/GroupManager"
+TaskManager  = require "./manager/TaskManager"
+Client       = require "./Client"
 
 registerContainerActions = require "./actions/registerContainerActions"
 registerImageActions     = require "./actions/registerImageActions"
@@ -21,12 +21,14 @@ do ->
 	docker       = new Docker
 	groupManager = new GroupManager
 	state        = undefined
+	taskManager  = undefined
 
 	onCommand = (topic, payload) ->
 		actionId                    = last topic.split "/"
 		json                        = JSON.parse payload
 		{ action, origin, payload } = json
 
+		forked  = client.fork()
 		topic   = "commands/#{origin}/#{actionId}/response"
 		payload = [payload] unless isArray payload
 		params  = [
@@ -35,14 +37,15 @@ do ->
 		]
 
 		try
-			client.publish topic, JSON.stringify
+			console.log await taskManager.rpc.call ...params
+			forked.publish topic, JSON.stringify
 				action:     action
-				data:       await rpc.call [rpc, params]...
+				data:       await taskManager.rpc.call ...params
 				statusCode: "OK"
 		catch error
 			log.error error.message
 
-			client.publish topic, JSON.stringify
+			forked.publish topic, JSON.stringify
 				action:     action
 				data:       error
 				statusCode: "ERROR"
@@ -61,16 +64,16 @@ do ->
 
 	client
 		.once "devices/{id}/groups", onInitialGroups
-		.on "commands/{id}",         onCommand
+		.on "commands/{id}/#",       onCommand
 		.on "devices/{id}/groups",   onGroups
 		.on "global/collections/+",  onCollection
 
 	await client.connect()
 	log.info "Connected to the MQTT broker"
 
-	rpc        = new RPC client.fork()
-	state      = new StateManager client.fork(), docker, groupManager
-	appUpdater = new AppUpdater docker, state, groupManager
+	taskManager = new TaskManager client.fork()
+	state       = new StateManager client.fork(), docker, groupManager
+	appUpdater  = new AppUpdater docker, state, groupManager
 
 	await client.subscribe ["commands/{id}/+", "devices/{id}/groups"]
 
@@ -78,7 +81,7 @@ do ->
 		appUpdater:   appUpdater
 		baseName:     "#{config.mqtt.actions.baseTopic}#{config.mqtt.clientId}"
 		docker:       docker
-		rpc:          rpc
+		rpc:          taskManager
 		state:        state
 		groupManager: groupManager
 
