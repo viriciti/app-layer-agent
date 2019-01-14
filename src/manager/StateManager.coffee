@@ -1,8 +1,9 @@
-_      = require "lodash"
-async  = require "async"
-config = require "config"
-debug  = (require "debug") "app:StateManager"
-fs     = require "fs"
+_             = require "lodash"
+async         = require "async"
+config        = require "config"
+debug         = (require "debug") "app: StateManager"
+fs            = require "fs"
+{ promisify } = require "util"
 
 pkg            = require "../../package.json"
 getIpAddresses = require "../helpers/getIPAddresses"
@@ -23,7 +24,10 @@ class StateManager
 		message = options.message
 		message = JSON.stringify message unless _.isString message
 
-		@socket.publish topic, message, options.opts, cb
+		if cb
+			@socket.publish topic, message, options.opts, cb
+		else
+			promisify(@socket.publish.bind @socket) topic, message, options.opts
 
 	sendStateToMqtt: (cb) =>
 		@generateStateObject (error, state) =>
@@ -68,10 +72,6 @@ class StateManager
 			topic:   "status"
 			message: "online"
 			opts:    retain: true
-		, (error) ->
-			return log.error if error
-
-			log.info "Status set to online"
 
 	publishLog: ({ type, message, time }) ->
 		@publish
