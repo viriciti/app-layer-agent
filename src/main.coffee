@@ -1,81 +1,30 @@
-RPC                                  = require "mqtt-json-rpc"
-config                               = require "config"
-mqtt                                 = require "mqtt"
-{ omit, last, isArray, every, once } = require "lodash"
+RPC               = require "mqtt-json-rpc"
+config            = require "config"
+{ last, isArray } = require "lodash"
 
 log            = require("./lib/Logger") "main"
 Docker         = require "./lib/Docker"
 AppUpdater     = require "./manager/AppUpdater"
 StateManager   = require "./manager/StateManager"
 GroupManager   = require "./manager/GroupManager"
+Client         = require "./Client"
 
 registerContainerActions = require "./actions/registerContainerActions"
 registerImageActions     = require "./actions/registerImageActions"
 registerDeviceActions    = require "./actions/registerDeviceActions"
 
-will =
-	topic:   "devices/#{config.mqtt.clientId}/status"
-	payload: "offline"
-	retain:  true
-
 log.info "Booting up manager ..."
 
-options      = config.mqtt
-options      = { ...options, ...config.mqtt.extraOptions, will }
-options      = omit options, "tls" unless every options.tls
-options      = omit options, "extraOptions"
-client       = mqtt.connect options
+do ->
+	appUpdater   = undefined
+	client       = new Client config.mqtt
+	docker       = new Docker
+	groupManager = new GroupManager
+	state        = undefined
 
-rpc          = new RPC client
-docker       = new Docker
-groupManager = new GroupManager
-state        = new StateManager client, docker, groupManager
-appUpdater   = new AppUpdater   docker, state, groupManager
-
-protocol      = if options.tls? then "mqtts" else "mqtt"
-mqttUrl       = "#{protocol}://#{options.host}:#{options.port}"
-actionOptions =
-	appUpdater:   appUpdater
-	baseName:     "#{config.mqtt.actions.baseTopic}#{options.clientId}"
-	docker:       docker
-	rpc:          rpc
-	state:        state
-	groupManager: groupManager
-
-subscribeToCollections = once ->
-	client.subscribe "global/collections/+"
-
-sendInitialState = once ->
-	state.sendStateToMqtt()
-	state.sendNsState()
-
-log.info "Connecting to #{mqttUrl} as #{options.clientId} ..."
-onConnect = ->
-	log.info "Connected to the MQTT broker"
-
-	client
-		.on "message",   onMessage
-		.on "error",     onError
-		.on "reconnect", onReconnect
-		.on "offline",   onOffline
-		.on "close",     onClose
-
-	state.notifyOnlineStatus()
-
-	registerContainerActions actionOptions
-	registerImageActions     actionOptions
-	registerDeviceActions    actionOptions
-
-	client.subscribe [
-		# Support commands from an older App Layer Control
-		"commands/#{options.clientId}/+"
-		"devices/#{options.clientId}/groups"
-	]
-
-onMessage = (topic, message) ->
-	if topic.startsWith "commands/#{options.clientId}"
+	onCommand = (topic, payload) ->
 		actionId                    = last topic.split "/"
-		json                        = JSON.parse message.toString()
+		json                        = JSON.parse payload
 		{ action, origin, payload } = json
 
 		topic   = "commands/#{origin}/#{actionId}/response"
@@ -97,34 +46,50 @@ onMessage = (topic, message) ->
 				action:     action
 				data:       error
 				statusCode: "ERROR"
-	else if topic is "devices/#{options.clientId}/groups"
-		groupManager.updateGroups JSON.parse message.toString()
-		subscribeToCollections()
-		sendInitialState()
-	else if topic.startsWith "global/collections"
-		appUpdater.handleCollection JSON.parse message.toString()
 
-onError = (error) ->
-	log.error "Could not connect to the MQTT broker: #{error.message}"
+	onInitialGroups = (topic, payload) ->
+		client.subscribe "global/collections/+"
 
-onReconnect = ->
-	log.warn "Reconnecting to the MQTT broker ..."
+		state.sendStateToMqtt()
+		state.sendNsState()
 
-onOffline = (reason) ->
-	log.warn "Disconnected"
+	onGroups = (topic, payload) ->
+		groupManager.updateGroups payload
 
-onClose = ->
+	onCollection = (topic, payload) ->
+		appUpdater.handleCollection JSON.parse payload
+
 	client
-		.removeListener "message",   onMessage
-		.removeListener "error",     onError
-		.removeListener "reconnect", onReconnect
-		.removeListener "offline",   onOffline
-		.removeListener "close",     onClose
+		.once "devices/{id}/groups", onInitialGroups
+		.on "commands/{id}",         onCommand
+		.on "devices/{id}/groups",   onGroups
+		.on "global/collections/+",  onCollection
 
-client.on "connect", onConnect
+	await client.connect()
+	log.info "Connected to the MQTT broker"
 
-docker.on "logs", (data) ->
-	return unless data
+	rpc        = new RPC client.fork()
+	state      = new StateManager client.fork(), docker, groupManager
+	appUpdater = new AppUpdater docker, state, groupManager
 
-	state.throttledSendAppState() if data.action?.type is "container"
-	state.publishLog data
+	await client.subscribe ["commands/{id}/+", "devices/{id}/groups"]
+
+	actionOptions =
+		appUpdater:   appUpdater
+		baseName:     "#{config.mqtt.actions.baseTopic}#{config.mqtt.clientId}"
+		docker:       docker
+		rpc:          rpc
+		state:        state
+		groupManager: groupManager
+
+	state.notifyOnlineStatus()
+
+	registerContainerActions actionOptions
+	registerImageActions     actionOptions
+	registerDeviceActions    actionOptions
+
+	docker.on "logs", (data) ->
+		return unless data
+
+		state.throttledSendAppState() if data.action?.type is "container"
+		state.publishLog data
