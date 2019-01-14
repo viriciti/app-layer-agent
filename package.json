@@ -18,7 +18,8 @@
     "mocha": "^5.2.0",
     "mockery": "^2.1.0",
     "mosca": "^2.8.3",
-    "nodemon": "^1.18.7"
+    "nodemon": "^1.18.7",
+    "spy": "^1.0.0"
   },
   "dependencies": {
     "@viriciti/app-layer-logic": "^1.2.3",
