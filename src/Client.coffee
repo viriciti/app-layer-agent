@@ -1,7 +1,8 @@
-mqtt                           = require "mqtt"
-{ omit, every, isArray, once } = require "lodash"
-{ promisify }                  = require "util"
-{ EventEmitter }               = require "events"
+MQTTPattern                       = require "mqtt-pattern"
+mqtt                              = require "mqtt"
+{ EventEmitter }                  = require "events"
+{ omit, every, isArray, forEach } = require "lodash"
+{ promisify }                     = require "util"
 
 log = require("./lib/Logger") "Client"
 
@@ -14,6 +15,7 @@ class Client extends EventEmitter
 		@options  = omit @options, "tls" unless every @options.tls
 		@options  = omit @options, "extraOptions"
 
+		@events           = []
 		@subscribedTopics = []
 
 	connect: ->
@@ -21,15 +23,24 @@ class Client extends EventEmitter
 			@mqtt = mqtt.connect @options
 
 			@mqtt
-				.once "connect", resolve
-				.on "message",   @onMessage
-				.on "error",     @onError
-				.on "reconnect", @onReconnect
-				.on "offline",   @onOffline
-				.on "close",     @onClose
+				.once "connect",     resolve
+				.on "packetreceive", @onPacket
+				.on "error",         @onError
+				.on "reconnect",     @onReconnect
+				.on "offline",       @onOffline
+				.on "close",         @onClose
 
-	onMessage: (topic) ->
-		console.log "Topic: #{topic}"
+	onPacket: (packet) =>
+		return unless packet
+		return unless packet?.topic
+		return unless packet?.cmd is "publish"
+
+		forEach @_events, (fn, topic) =>
+			payload  = packet.payload.toString()
+			expanded = @expandTopic topic
+			return unless MQTTPattern.matches expanded, packet.topic
+
+			@emit topic, expanded, payload
 
 	onError: (error) ->
 		log.error "Could not connect to the MQTT broker: #{error.message}"
@@ -37,36 +48,35 @@ class Client extends EventEmitter
 	onReconnect: ->
 		log.warn "Reconnecting to the MQTT broker ..."
 
-	onOffline: (reason) ->
+	onOffline: ->
 		log.warn "Disconnected"
 
-	onClose: ->
+	onClose: (reason) =>
 		@mqtt
-			.removeListener "message",   @onMessage
-			.removeListener "error",     @onError
-			.removeListener "reconnect", @onReconnect
-			.removeListener "offline",   @onOffline
-			.removeListener "close",     @onClose
+			.removeListener "packetreceive", @onPacket
+			.removeListener "error",         @onError
+			.removeListener "reconnect",     @onReconnect
+			.removeListener "offline",       @onOffline
+			.removeListener "close",         @onClose
 
 	getWill: ->
 		topic:   "devices/#{@clientId}/status"
 		payload: "offline"
 		retain:  true
 
+	expandTopic: (topic) =>
+		topic.replace /{id}/g, @clientId
+
 	fork: ->
+		throw new Error "You must connect before you can fork the MQTT client" unless @mqtt
 		@mqtt
 
 	subscribe: (topics) ->
+		await @connect() unless @mqtt
+
 		topics = [topics] unless isArray topics
-		topics = topics.map (topic) =>
-			topic.replace /{id}/g, @clientId
+		topics = topics.map @expandTopic
 
 		promisify(@mqtt.subscribe.bind @mqtt) topics
-
-	subscribeOnce: once (state) =>
-		@mqtt.subscribe "global/collections/+"
-
-		state.sendStateToMqtt()
-		state.sendNsState()
 
 module.exports = Client
