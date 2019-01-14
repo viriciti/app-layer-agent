@@ -54,12 +54,6 @@ onCommand = (topic, payload) ->
 			data:       error
 			statusCode: "ERROR"
 
-onInitialGroups = (topic, payload) ->
-	client.subscribe "global/collections/+"
-
-	state.sendStateToMqtt()
-	state.sendNsState()
-
 onGroups = (topic, payload) ->
 	groupManager.updateGroups payload
 
@@ -68,7 +62,11 @@ onCollection = (topic, payload) ->
 
 do ->
 	client
-		.once "devices/{id}/groups", onInitialGroups
+		.once "devices/{id}/groups", (topic, payload) ->
+			client.subscribe "global/collections/+"
+
+			state.sendStateToMqtt()
+			state.sendNsState()
 		.on "commands/{id}/#",       onCommand
 		.on "devices/{id}/groups",   onGroups
 		.on "global/collections/+",  onCollection
@@ -85,9 +83,9 @@ do ->
 	actionOptions =
 		appUpdater:   appUpdater
 		docker:       docker
-		rpc:          taskManager
-		state:        state
 		groupManager: groupManager
+		state:        state
+		taskManager:  taskManager
 
 	state.notifyOnlineStatus()
 
@@ -95,7 +93,7 @@ do ->
 	registerImageActions     actionOptions
 	registerDeviceActions    actionOptions
 
-	taskManager.on "added", ->
+	taskManager.on "task", ->
 		state.sendNsState queue: map taskManager.getTasks(), (task) ->
 			name:     task.name
 			finished: task.finished

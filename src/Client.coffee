@@ -23,12 +23,16 @@ class Client extends EventEmitter
 			@mqtt = mqtt.connect @options
 
 			@mqtt
-				.once "connect",     resolve
-				.on "packetreceive", @onPacket
-				.on "error",         @onError
-				.on "reconnect",     @onReconnect
-				.on "offline",       @onOffline
-				.on "close",         @onClose
+				.once "connect", resolve
+				.on   "connect", @onConnect
+
+	onConnect: =>
+		@mqtt
+			.on "packetreceive", @onPacket
+			.on "error",         @onError
+			.on "reconnect",     @onReconnect
+			.on "offline",       @onOffline
+			.on "close",         @onClose
 
 	onPacket: (packet) =>
 		return unless packet
@@ -51,7 +55,7 @@ class Client extends EventEmitter
 	onOffline: ->
 		log.warn "Disconnected"
 
-	onClose: (reason) =>
+	onClose: =>
 		@mqtt
 			.removeListener "packetreceive", @onPacket
 			.removeListener "error",         @onError

@@ -6,7 +6,7 @@ config                     = require "config"
 
 class TaskManager extends EventEmitter
 	constructor: (mqtt) ->
-		super mqtt
+		super()
 
 		@rpc        = new RPC mqtt
 		@registered = []
@@ -16,19 +16,14 @@ class TaskManager extends EventEmitter
 	handleTask: ({ name, fn, params, taskId, queuedOn }, cb) =>
 		fn ...params
 			.then =>
-				cb()
-
 				@finishTask
 					name:     @getTaskName name
 					params:   params
 					taskId:   taskId
 					queuedOn: queuedOn
 
-				@emit "done",
-					name:     @getTaskName name
-					params:   params
-			.catch (error) =>
-				@emit "error", error
+				cb()
+			.catch (error) ->
 				cb error
 
 	addTask: ({ name, fn, params }) ->
@@ -38,8 +33,14 @@ class TaskManager extends EventEmitter
 			params:   params
 			taskId:   uniqueId()
 			queuedOn: Date.now()
+		, (error) =>
+			return @emit "error", error if error
 
-		@emit "added",
+			@emit "done",
+				name:   @getTaskName name
+				params: params
+
+		@emit "task",
 			name:     @getTaskName name
 			params:   params
 

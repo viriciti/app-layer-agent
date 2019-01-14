@@ -5,6 +5,7 @@ spy                              = require "spy"
 { random, isArray, every, some } = require "lodash"
 
 Client = require "../src/Client"
+
 doneAfter = (calls, done) ->
 	throw new Error "Minimum call count is 1"  if calls < 1
 	throw new Error "Maximum call count is 15" if calls > 15

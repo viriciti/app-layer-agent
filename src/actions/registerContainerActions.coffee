@@ -3,7 +3,7 @@ debug         = (require "debug") "app:registerContainerActions"
 
 registerFunction = require "../helpers/registerFunction"
 
-module.exports = ({ rpc, docker }) ->
+module.exports = ({ taskManager, docker }) ->
 	onRemoveContainer = ({ id, force = true }) ->
 		debug "Removing container '#{id}'"
 		await promisify(docker.removeContainer.bind docker) { id, force }
@@ -17,17 +17,17 @@ module.exports = ({ rpc, docker }) ->
 		await promisify(docker.getContainerLogs.bind docker) { id }
 
 	registerFunction
-		fn:   onRemoveContainer
-		name: "removeContainer"
-		rpc:  rpc
+		fn:          onRemoveContainer
+		name:        "removeContainer"
+		taskManager: taskManager
 
 	registerFunction
-		fn:   onRestartContainer
-		name: "restartContainer"
-		rpc:  rpc
+		fn:          onRestartContainer
+		name:        "restartContainer"
+		taskManager: taskManager
 
 	registerFunction
-		fn:   onFetchContainerLogs
-		name: "getContainerLogs"
-		rpc:  rpc
-		sync: true
+		fn:          onFetchContainerLogs
+		name:        "getContainerLogs"
+		taskManager: taskManager
+		sync:        true

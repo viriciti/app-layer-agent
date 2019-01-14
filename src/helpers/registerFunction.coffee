@@ -1,7 +1,7 @@
 debug = (require "debug") "app:helpers:registerFunction"
 config = require "config"
 
-module.exports = ({ rpc, name, fn, sync = false }) ->
+module.exports = ({ taskManager, name, fn, sync = false }) ->
 	name = [
 		config.mqtt.actions.baseTopic
 		config.mqtt.clientId
@@ -13,7 +13,7 @@ module.exports = ({ rpc, name, fn, sync = false }) ->
 
 	debug "Registering function '#{name}' ..."
 
-	rpc.register name, (...params) ->
+	taskManager.register name, (...params) ->
 		debug "Executing function '#{name}' ..."
 
 		# sync actions are currently unqueueable because
@@ -22,7 +22,7 @@ module.exports = ({ rpc, name, fn, sync = false }) ->
 		if sync
 			fn ...params
 		else
-			rpc.addTask
+			taskManager.addTask
 				name:   name
 				fn:     fn
 				params: params

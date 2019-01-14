@@ -2,7 +2,7 @@ debug = (require "debug") "app:registerDeviceActions"
 
 registerFunction = require "../helpers/registerFunction"
 
-module.exports = ({ rpc, state }) ->
+module.exports = ({ taskManager, state }) ->
 	onRefreshState = ->
 		debug "Refreshing state ..."
 
@@ -12,6 +12,6 @@ module.exports = ({ rpc, state }) ->
 		Promise.resolve()
 
 	registerFunction
-		fn:   onRefreshState
-		name: "refreshState"
-		rpc:  rpc
+		fn:          onRefreshState
+		name:        "refreshState"
+		taskManager: taskManager

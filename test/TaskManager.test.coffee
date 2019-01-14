@@ -17,7 +17,7 @@ thenable    = (delay) -> ->
 resolver = ->
 	Promise.resolve()
 
-describe.only ".TaskManager", ->
+describe ".TaskManager", ->
 	port   = random 5000, 10000
 	server = null
 	client = null
@@ -37,10 +37,10 @@ describe.only ".TaskManager", ->
 
 		assert.equal manager.getTasks().length, 0
 
-	it "should emit 'added' event when a new task is added", (done) ->
+	it "should emit 'task' event when a new task is added", (done) ->
 		manager = new TaskManager client
 
-		manager.once "added", ({ name, params }) ->
+		manager.once "task", ({ name, params }) ->
 			assert.deepStrictEqual params, ["a"]
 			assert.equal name, "hello-world"
 			assert.equal manager.getTasks().length, 1
@@ -94,15 +94,15 @@ describe.only ".TaskManager", ->
 		rpc     = new RPC client
 		manager = new TaskManager client
 
-		manager.once "added", ({ name, params }) ->
+		manager.once "task", ({ name, params }) ->
 			assert.deepStrictEqual params, [test: true]
 			assert.equal name, "test"
 			done()
 
 		registerFunction
-			fn:   resolver
-			name: "test"
-			rpc:  manager
+			fn:          resolver
+			name:        "test"
+			taskManager: manager
 
 		rpc.notify "actions/#{config.mqtt.clientId}/test", test: true
 
