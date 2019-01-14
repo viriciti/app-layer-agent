@@ -3,12 +3,12 @@ debug         = (require "debug") "app:registerImageActions"
 
 registerFunction = require "../helpers/registerFunction"
 
-module.exports = ({ baseName, rpc, docker }) ->
+module.exports = ({ rpc, docker }) ->
 	onRemoveImage = ({ id, force = true }) ->
 		debug "Removing image '#{id}'"
 		await promisify(docker.removeImage.bind docker) { id, force }
 
 	registerFunction
 		fn:   onRemoveImage
-		name: "#{baseName}/removeImage"
+		name: "removeImage"
 		rpc:  rpc

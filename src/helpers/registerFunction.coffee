@@ -1,6 +1,13 @@
 debug = (require "debug") "app:helpers:registerFunction"
+config = require "config"
 
 module.exports = ({ rpc, name, fn, sync = false }) ->
+	name = [
+		config.mqtt.actions.baseTopic
+		config.mqtt.clientId
+		name
+	].join "/"
+
 	# remove duplicate forward slashes
 	name = name.replace /\/{2,}/g, "/"
 

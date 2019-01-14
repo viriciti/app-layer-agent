@@ -32,7 +32,11 @@ do ->
 		topic   = "commands/#{origin}/#{actionId}/response"
 		payload = [payload] unless isArray payload
 		params  = [
-			"#{actionOptions.baseName}/#{action}"
+			[
+				config.mqtt.actions.baseTopic
+				config.mqtt.clientId
+				action
+			].join "/"
 			...payload
 		]
 
@@ -79,7 +83,6 @@ do ->
 
 	actionOptions =
 		appUpdater:   appUpdater
-		baseName:     "#{config.mqtt.actions.baseTopic}#{config.mqtt.clientId}"
 		docker:       docker
 		rpc:          taskManager
 		state:        state

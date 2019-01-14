@@ -2,7 +2,7 @@ debug = (require "debug") "app:registerDeviceActions"
 
 registerFunction = require "../helpers/registerFunction"
 
-module.exports = ({ baseName, rpc, state }) ->
+module.exports = ({ rpc, state }) ->
 	onRefreshState = ->
 		debug "Refreshing state ..."
 
@@ -13,5 +13,5 @@ module.exports = ({ baseName, rpc, state }) ->
 
 	registerFunction
 		fn:   onRefreshState
-		name: "#{baseName}/refreshState"
+		name: "refreshState"
 		rpc:  rpc
