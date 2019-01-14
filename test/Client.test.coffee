@@ -36,16 +36,20 @@ describe.only ".Client", ->
 		client.connect()
 
 	it "should have a last will and testament (LWT)", ->
-		client      = new Client mqttOptions
-		{ options } = client
-
-		assert.ok options.will
-		{ will }                   = options
-		{ topic, payload, retain } = will
+		client                     = new Client mqttOptions
+		{ topic, payload, retain } = client.getWill()
 
 		assert.ok MQTTPattern.matches "devices/+/status", topic
 		assert.ok payload
 		assert.ok retain
+
+	it "should support placeholders", ->
+		{ clientId } = mqttOptions
+		client       = new Client mqttOptions
+		topic        = client.expandTopic "test/{id}/abc"
+		expected     = "test/#{clientId}/abc"
+
+		assert.equal topic, expected
 
 	it "should replace placeholders when subscribing", ->
 		client       = new Client mqttOptions
