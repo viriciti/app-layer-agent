@@ -20,6 +20,9 @@ module.exports =
 		sendStateThrottleTime:    10000
 		sendAppStateThrottleTime: 3000
 
+	queue:
+		maxStoredTasks: 15
+
 	docker:
 		socketPath: "/var/run/docker.sock"
 		container:

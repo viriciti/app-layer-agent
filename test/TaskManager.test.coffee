@@ -1,8 +1,9 @@
-assert     = require "assert"
-mosca      = require "mosca"
-mqtt       = require "mqtt"
-{ random } = require "lodash"
-RPC        = require "mqtt-json-rpc"
+RPC               = require "mqtt-json-rpc"
+assert            = require "assert"
+config            = require "config"
+mosca             = require "mosca"
+mqtt              = require "mqtt"
+{ random, first } = require "lodash"
 
 registerFunction = require "../src/helpers/registerFunction"
 
@@ -16,14 +17,14 @@ thenable    = (delay) -> ->
 resolver = ->
 	Promise.resolve()
 
-describe ".TaskManager", ->
+describe.only ".TaskManager", ->
 	port   = random 5000, 10000
 	server = null
 	client = null
 
 	before (done) ->
 		server = new mosca.Server port: port
-		client = mqtt.connect port: port, clientId: "app-layer-agent-tester"
+		client = mqtt.connect port: port, clientId: config.mqtt.clientId
 
 		client.once "connect", -> done()
 
@@ -31,18 +32,18 @@ describe ".TaskManager", ->
 		client.end()
 		server.close()
 
-	it "should start with no remaining tasks", ->
+	it "should start with no tasks", ->
 		manager = new TaskManager client
 
-		assert.equal manager.getRemainingTasks().length, 0
+		assert.equal manager.getTasks().length, 0
 
 	it "should emit 'added' event when a new task is added", (done) ->
 		manager = new TaskManager client
 
-		manager.once "added", ({ name, params, remaining }) ->
+		manager.once "added", ({ name, params }) ->
 			assert.deepStrictEqual params, ["a"]
 			assert.equal name, "hello-world"
-			assert.equal remaining.length, 1
+			assert.equal manager.getTasks().length, 1
 			done()
 
 		manager.addTask
@@ -54,9 +55,14 @@ describe ".TaskManager", ->
 		manager = new TaskManager client
 
 		manager.once "done", ({ name, params }) ->
+			tasks = manager.getTasks()
+			assert.equal tasks.length, 1
+
+			task = first tasks
+
 			assert.deepStrictEqual params, ["b"]
-			assert.equal name, "hello-world"
-			assert.equal manager.getRemainingTasks().length, 0
+			assert.equal name, task.name
+			assert.ok task.finished
 			done()
 
 		manager.addTask
@@ -77,7 +83,12 @@ describe ".TaskManager", ->
 				params: task.params
 				fn:     thenable 1000
 
-		assert.deepStrictEqual manager.getRemainingTasks(), tasks
+		processedTasks = manager
+			.getTasks()
+			.map ({ name, params }) ->
+				{ name, params }
+
+		assert.deepStrictEqual processedTasks, tasks
 
 	it "should add tasks from rpc", (done) ->
 		rpc     = new RPC client
@@ -88,6 +99,9 @@ describe ".TaskManager", ->
 			assert.equal name, "test"
 			done()
 
-		registerFunction manager, "test", resolver
+		registerFunction
+			fn:   resolver
+			name: "test"
+			rpc:  manager
 
-		rpc.notify "test", test: true
+		rpc.notify "actions/#{config.mqtt.clientId}/test", test: true

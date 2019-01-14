@@ -16,6 +16,9 @@ module.exports = ({ rpc, name, fn, sync = false }) ->
 	rpc.register name, (...params) ->
 		debug "Executing function '#{name}' ..."
 
+		# sync actions are currently unqueueable because
+		# the server expects a response, which is not possible
+		# due to the background processing of actions
 		if sync
 			fn ...params
 		else

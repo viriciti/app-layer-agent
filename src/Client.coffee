@@ -68,7 +68,7 @@ class Client extends EventEmitter
 		topic.replace /{id}/g, @clientId
 
 	fork: ->
-		throw new Error "You must connect before you can fork the MQTT client" unless @mqtt
+		throw new Error "You must connect to the broker before you can fork the MQTT client" unless @mqtt
 		@mqtt
 
 	subscribe: (topics) ->

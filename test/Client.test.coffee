@@ -14,7 +14,7 @@ doneAfter = (calls, done) ->
 
 	watcher
 
-describe.only ".Client", ->
+describe ".Client", ->
 	port        = random 5000, 10000
 	server      = null
 	mqttOptions = null

@@ -1,5 +1,5 @@
-config            = require "config"
-{ last, isArray } = require "lodash"
+config                 = require "config"
+{ last, isArray, map } = require "lodash"
 
 log          = require("./lib/Logger") "main"
 Docker       = require "./lib/Docker"
@@ -13,59 +13,60 @@ registerContainerActions = require "./actions/registerContainerActions"
 registerImageActions     = require "./actions/registerImageActions"
 registerDeviceActions    = require "./actions/registerDeviceActions"
 
-log.info "Booting up manager ..."
+log.info "Booting up App Layer Agent ..."
+
+appUpdater   = undefined
+client       = new Client config.mqtt
+docker       = new Docker
+groupManager = new GroupManager
+state        = undefined
+taskManager  = undefined
+
+onCommand = (topic, payload) ->
+	actionId                    = last topic.split "/"
+	json                        = JSON.parse payload
+	{ action, origin, payload } = json
+
+	forked  = client.fork()
+	topic   = "commands/#{origin}/#{actionId}/response"
+	payload = [payload] unless isArray payload
+	params  = [
+		[
+			config.mqtt.actions.baseTopic
+			config.mqtt.clientId
+			action
+		]
+			.join "/"
+			.replace /\/{2,}/g, "/"
+		...payload
+	]
+
+	try
+		forked.publish topic, JSON.stringify
+			action:     action
+			data:       await taskManager.rpc.call ...params
+			statusCode: "OK"
+	catch error
+		log.error error.message
+
+		forked.publish topic, JSON.stringify
+			action:     action
+			data:       error
+			statusCode: "ERROR"
+
+onInitialGroups = (topic, payload) ->
+	client.subscribe "global/collections/+"
+
+	state.sendStateToMqtt()
+	state.sendNsState()
+
+onGroups = (topic, payload) ->
+	groupManager.updateGroups payload
+
+onCollection = (topic, payload) ->
+	appUpdater.handleCollection JSON.parse payload
 
 do ->
-	appUpdater   = undefined
-	client       = new Client config.mqtt
-	docker       = new Docker
-	groupManager = new GroupManager
-	state        = undefined
-	taskManager  = undefined
-
-	onCommand = (topic, payload) ->
-		actionId                    = last topic.split "/"
-		json                        = JSON.parse payload
-		{ action, origin, payload } = json
-
-		forked  = client.fork()
-		topic   = "commands/#{origin}/#{actionId}/response"
-		payload = [payload] unless isArray payload
-		params  = [
-			[
-				config.mqtt.actions.baseTopic
-				config.mqtt.clientId
-				action
-			].join "/"
-			...payload
-		]
-
-		try
-			console.log await taskManager.rpc.call ...params
-			forked.publish topic, JSON.stringify
-				action:     action
-				data:       await taskManager.rpc.call ...params
-				statusCode: "OK"
-		catch error
-			log.error error.message
-
-			forked.publish topic, JSON.stringify
-				action:     action
-				data:       error
-				statusCode: "ERROR"
-
-	onInitialGroups = (topic, payload) ->
-		client.subscribe "global/collections/+"
-
-		state.sendStateToMqtt()
-		state.sendNsState()
-
-	onGroups = (topic, payload) ->
-		groupManager.updateGroups payload
-
-	onCollection = (topic, payload) ->
-		appUpdater.handleCollection JSON.parse payload
-
 	client
 		.once "devices/{id}/groups", onInitialGroups
 		.on "commands/{id}/#",       onCommand
@@ -93,6 +94,16 @@ do ->
 	registerContainerActions actionOptions
 	registerImageActions     actionOptions
 	registerDeviceActions    actionOptions
+
+	taskManager.on "added", ->
+		state.sendNsState queue: map taskManager.getTasks(), (task) ->
+			name:     task.name
+			finished: task.finished
+
+	taskManager.on "done", ->
+		state.sendNsState queue: map taskManager.getTasks(), (task) ->
+			name:     task.name
+			finished: task.finished
 
 	docker.on "logs", (data) ->
 		return unless data

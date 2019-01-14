@@ -1,6 +1,8 @@
-async            = require "async"
-RPC              = require "mqtt-json-rpc"
-{ EventEmitter } = require "events"
+RPC                        = require "mqtt-json-rpc"
+async                      = require "async"
+config                     = require "config"
+{ EventEmitter }           = require "events"
+{ last, uniqueId, uniqBy } = require "lodash"
 
 class TaskManager extends EventEmitter
 	constructor: (mqtt) ->
@@ -8,16 +10,22 @@ class TaskManager extends EventEmitter
 
 		@rpc        = new RPC mqtt
 		@registered = []
+		@finished   = []
 		@queue      = async.queue @handleTask
 
-	handleTask: ({ name, fn, params }, cb) =>
+	handleTask: ({ name, fn, params, taskId }, cb) =>
 		fn ...params
 			.then =>
 				cb()
 
-				@emit "done",
-					name:   name
+				@finishTask
+					name:   @getTaskName name
 					params: params
+					taskId: taskId
+
+				@emit "done",
+					name:     @getTaskName name
+					params:   params
 			.catch (error) =>
 				@emit "error", error
 				cb error
@@ -27,20 +35,38 @@ class TaskManager extends EventEmitter
 			name:   name
 			fn:     fn
 			params: params
+			taskId: uniqueId()
 
 		@emit "added",
-			name:      name
-			params:    params
-			remaining: @getRemainingTasks()
+			name:     @getTaskName name
+			params:   params
 
-	getRemainingTasks: ->
-		[]
-			.concat @queue.workersList().map ({ data }) ->
-				name:   data.name
-				params: data.params
-			.concat @queue._tasks.toArray().map ({ name, params }) ->
-				name:   name
-				params: params
+	finishTask: ({ name, params, taskId }) ->
+		@finished.shift() if @finished.length > config.queue.maxStoredTasks
+
+		@finished.push
+			finished: true
+			name:     name
+			params:   params
+			taskId:   taskId
+
+	getTaskName: (fullTaskName) ->
+		last fullTaskName?.split "/"
+
+	getTasks: ->
+		uniqBy ([]
+			.concat @queue.workersList().map ({ data }) =>
+				finished: false
+				name:     @getTaskName data.name
+				params:   data.params
+				taskId:   data.taskId
+			.concat @queue._tasks.toArray().map ({ name, params, taskId }) =>
+				finished: false
+				name:     @getTaskName name
+				params:   params
+				taskId:   taskId
+			.concat @finished
+		), "taskId"
 
 	register: (name, fn) ->
 		@unregister name if @registered.includes name
