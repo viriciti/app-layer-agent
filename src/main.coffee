@@ -99,11 +99,14 @@ do ->
 		state.sendNsState queue: map taskManager.getTasks(), (task) ->
 			name:     task.name
 			finished: task.finished
+			queuedOn: task.queuedOn
 
 	taskManager.on "done", ->
 		state.sendNsState queue: map taskManager.getTasks(), (task) ->
-			name:     task.name
-			finished: task.finished
+			name:       task.name
+			finished:   task.finished
+			queuedOn:   task.queuedOn
+			finishedAt: task.finishedAt
 
 	docker.on "logs", (data) ->
 		return unless data

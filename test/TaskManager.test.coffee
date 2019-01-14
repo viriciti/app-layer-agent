@@ -105,3 +105,35 @@ describe.only ".TaskManager", ->
 			rpc:  manager
 
 		rpc.notify "actions/#{config.mqtt.clientId}/test", test: true
+
+	it "should add queued time when adding a new task", ->
+		manager = new TaskManager client
+
+		manager.addTask
+			fn:     thenable 1000
+			name:   "hello-world"
+			params: ["a"]
+
+		task = first manager.getTasks()
+		now  = Date.now()
+
+		assert.ok task.queuedOn
+		assert.ok task.queuedOn < now + 1000
+		assert.ok task.queuedOn > now - 1000
+
+	it "should add finished time when a task is done", (done) ->
+		manager = new TaskManager client
+
+		manager.once "done", ->
+			task = first manager.getTasks()
+			now  = Date.now()
+
+			assert.notEqual task.queuedOn, task.finishedAt
+			assert.ok task.finishedAt < now + 1000
+			assert.ok task.finishedAt > now - 1000
+			done()
+
+		manager.addTask
+			fn:     thenable 100
+			name:   "hello-world"
+			params: ["a"]

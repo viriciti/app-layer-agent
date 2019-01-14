@@ -13,15 +13,16 @@ class TaskManager extends EventEmitter
 		@finished   = []
 		@queue      = async.queue @handleTask
 
-	handleTask: ({ name, fn, params, taskId }, cb) =>
+	handleTask: ({ name, fn, params, taskId, queuedOn }, cb) =>
 		fn ...params
 			.then =>
 				cb()
 
 				@finishTask
-					name:   @getTaskName name
-					params: params
-					taskId: taskId
+					name:     @getTaskName name
+					params:   params
+					taskId:   taskId
+					queuedOn: queuedOn
 
 				@emit "done",
 					name:     @getTaskName name
@@ -32,39 +33,44 @@ class TaskManager extends EventEmitter
 
 	addTask: ({ name, fn, params }) ->
 		@queue.push
-			name:   name
-			fn:     fn
-			params: params
-			taskId: uniqueId()
+			name:     name
+			fn:       fn
+			params:   params
+			taskId:   uniqueId()
+			queuedOn: Date.now()
 
 		@emit "added",
 			name:     @getTaskName name
 			params:   params
 
-	finishTask: ({ name, params, taskId }) ->
+	finishTask: ({ name, params, taskId, queuedOn }) ->
 		@finished.shift() if @finished.length > config.queue.maxStoredTasks
 
 		@finished.push
-			finished: true
-			name:     name
-			params:   params
-			taskId:   taskId
+			finished:   true
+			finishedAt: Date.now()
+			name:       name
+			params:     params
+			queuedOn:   queuedOn
+			taskId:     taskId
 
 	getTaskName: (fullTaskName) ->
 		last fullTaskName?.split "/"
 
 	getTasks: ->
+		extractFromQueuedTask = (source, finished) =>
+			finished:   finished
+			name:       @getTaskName source.name
+			params:     source.params
+			taskId:     source.taskId
+			queuedOn:   source.queuedOn
+			finishedAt: source.finishedAt
+
 		uniqBy ([]
-			.concat @queue.workersList().map ({ data }) =>
-				finished: false
-				name:     @getTaskName data.name
-				params:   data.params
-				taskId:   data.taskId
-			.concat @queue._tasks.toArray().map ({ name, params, taskId }) =>
-				finished: false
-				name:     @getTaskName name
-				params:   params
-				taskId:   taskId
+			.concat @queue.workersList().map ({ data }) ->
+				extractFromQueuedTask data, false
+			.concat @queue._tasks.toArray().map (task) ->
+				extractFromQueuedTask task, false
 			.concat @finished
 		), "taskId"
 
