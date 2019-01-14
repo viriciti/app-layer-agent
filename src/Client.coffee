@@ -34,6 +34,8 @@ class Client extends EventEmitter
 			.on "offline",       @onOffline
 			.on "close",         @onClose
 
+		@emit "connect"
+
 	onPacket: (packet) =>
 		return unless packet
 		return unless packet?.topic
@@ -62,6 +64,8 @@ class Client extends EventEmitter
 			.removeListener "reconnect",     @onReconnect
 			.removeListener "offline",       @onOffline
 			.removeListener "close",         @onClose
+
+		@emit "close"
 
 	getWill: ->
 		topic:   "devices/#{@clientId}/status"

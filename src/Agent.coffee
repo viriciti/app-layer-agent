@@ -19,6 +19,10 @@ class Agent
 		@docker       = new Docker
 		@groupManager = new GroupManager
 
+		@client
+			.on "connect", @onConnect
+			.on "close",   @onClose
+
 		await @client.connect()
 
 		@taskManager = new TaskManager @client.fork()
@@ -36,6 +40,9 @@ class Agent
 		registerImageActions     actionOptions
 		registerDeviceActions    actionOptions
 
+		await @client.subscribe ["commands/{id}/+", "devices/{id}/groups"]
+
+	onConnect: =>
 		@taskManager
 			.on "task", @onQueueUpdate
 			.on "done", @onQueueUpdate
@@ -49,12 +56,24 @@ class Agent
 
 				@state.sendStateToMqtt()
 				@state.sendNsState()
-			.on "commands/{id}/#",       @onCommand
-			.on "devices/{id}/groups",   @onGroups
-			.on "global/collections/+",  @onCollection
+			.on "commands/{id}/#",      @onCommand
+			.on "devices/{id}/groups",  @onGroups
+			.on "global/collections/+", @onCollection
 
 		await @state.notifyOnlineStatus()
-		await @client.subscribe ["commands/{id}/+", "devices/{id}/groups"]
+
+	onClose: =>
+		@taskManager
+			.removeListener "task", @onQueueUpdate
+			.removeListener "done", @onQueueUpdate
+
+		@docker
+			.removeListener "logs", @onLogs
+
+		@client
+			.removeListener "commands/{id}/#",      @onCommand
+			.removeListener "devices/{id}/groups",  @onGroups
+			.removeListener "global/collections/+", @onCollection
 
 	onCommand: (topic, payload) =>
 		actionId                    = last topic.split "/"
