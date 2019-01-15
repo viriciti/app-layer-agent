@@ -1,9 +1,9 @@
-RPC               = require "mqtt-json-rpc"
-assert            = require "assert"
-config            = require "config"
-mosca             = require "mosca"
-mqtt              = require "mqtt"
-{ random, first } = require "lodash"
+RPC                              = require "mqtt-json-rpc"
+assert                           = require "assert"
+config                           = require "config"
+mosca                            = require "mosca"
+mqtt                             = require "mqtt"
+{ random, first, isPlainObject } = require "lodash"
 
 registerFunction = require "../src/helpers/registerFunction"
 
@@ -135,5 +135,24 @@ describe ".TaskManager", ->
 
 		manager.addTask
 			fn:     thenable 100
+			name:   "hello-world"
+			params: ["a"]
+
+	it.only "should add an error status if a task fails", (done) ->
+		manager    = new TaskManager client
+		error      = new Error "Well, this failed"
+		error.code = 15
+
+		manager.once "done", ->
+			task = first manager.getTasks()
+
+			assert.ok isPlainObject task.error
+			assert.equal task.status,        "error"
+			assert.equal task.error.message, "Well, this failed"
+			assert.equal task.error.code,    15
+			done()
+
+		manager.addTask
+			fn:     -> Promise.reject error
 			name:   "hello-world"
 			params: ["a"]

@@ -115,10 +115,14 @@ class Agent
 
 	onQueueUpdate: =>
 		@state.sendNsState queue: map @taskManager.getTasks(), (task) ->
-			name:       task.name
-			finished:   task.finished
-			queuedOn:   task.queuedOn
-			finishedAt: task.finishedAt
+			Object.assign {},
+				name:       task.name
+				finished:   task.finished
+				queuedOn:   task.queuedOn
+				finishedAt: task.finishedAt
+				status:     task.status
+			,
+				error: task.error if task.error
 
 	onLogs: (data) =>
 		return unless data

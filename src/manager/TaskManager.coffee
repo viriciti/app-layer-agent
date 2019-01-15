@@ -19,11 +19,21 @@ class TaskManager extends EventEmitter
 				@finishTask
 					name:     @getTaskName name
 					params:   params
-					taskId:   taskId
 					queuedOn: queuedOn
+					status:   "ok"
+					taskId:   taskId
 
 				cb()
-			.catch (error) ->
+			.catch (error) =>
+				@finishTask
+					name:     @getTaskName name
+					params:   params
+					queuedOn: queuedOn
+					status:   "error"
+					taskId:   taskId
+					error:
+						message: error
+
 				cb error
 
 	addTask: ({ name, fn, params }) ->
@@ -33,9 +43,7 @@ class TaskManager extends EventEmitter
 			params:   params
 			taskId:   uniqueId()
 			queuedOn: Date.now()
-		, (error) =>
-			return @emit "error", error if error
-
+		, =>
 			@emit "done",
 				name:   @getTaskName name
 				params: params
@@ -44,16 +52,19 @@ class TaskManager extends EventEmitter
 			name:     @getTaskName name
 			params:   params
 
-	finishTask: ({ name, params, taskId, queuedOn }) ->
+	finishTask: ({ name, params, taskId, queuedOn, status, error }) ->
 		@finished.shift() if @finished.length > config.queue.maxStoredTasks
 
-		@finished.push
+		@finished.push Object.assign {},
 			finished:   true
 			finishedAt: Date.now()
 			name:       name
 			params:     params
 			queuedOn:   queuedOn
+			status:     status
 			taskId:     taskId
+		,
+			error: error if error
 
 	getTaskName: (fullTaskName) ->
 		last fullTaskName?.split "/"

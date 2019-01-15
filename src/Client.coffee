@@ -17,7 +17,6 @@ class Client extends EventEmitter
 		@options  = omit @options, "tls" unless every @options.tls
 		@options  = omit @options, "extraOptions"
 
-		@events           = []
 		@subscribedTopics = []
 
 	connect: ->

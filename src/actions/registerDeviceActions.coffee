@@ -6,6 +6,8 @@ module.exports = ({ taskManager, state }) ->
 	onRefreshState = ->
 		debug "Refreshing state ..."
 
+		return Promise.reject "Too bad"
+
 		state.throttledSendState()
 		state.sendNsState()
 

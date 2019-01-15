@@ -5,7 +5,7 @@ config   = require "config"
 
 Agent = require "../src/Agent"
 
-describe.only ".Agent", ->
+describe ".Agent", ->
 	server = null
 
 	before (done) ->
