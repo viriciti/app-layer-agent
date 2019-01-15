@@ -59,7 +59,7 @@ describe ".AppUpdater", ->
 			default: groups["default"]
 
 		updater.update groups, [], (error) ->
-			assert.ok error.message.match /Default group must appear first/i
+			assert.ok error.message.match /default group must appear first/i
 			done()
 
 	it "should be able to convert binds to mounts", ->

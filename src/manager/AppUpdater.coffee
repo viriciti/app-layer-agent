@@ -8,12 +8,13 @@ config                                    = require "config"
 class AppUpdater
 	constructor: (@docker, @state, @groupManager) ->
 		@handleCollection = debounce @handleCollection, 2000
-		@queue            = async.queue ({ func, meta }, cb) -> func cb
+		@queue            = async.queue @handleUpdate
+
+	handleUpdate: ({ fn }, cb) ->
+		fn cb
 
 	handleCollection: (groups) =>
-		return log.error "No global groups are configured" if isEmpty groups
-
-		@state.setGlobalGroups groups
+		return log.error "No applications available (empty groups)" if isEmpty groups
 
 		groupNames = @groupManager.getGroups()
 		groups     = pickBy groups, (_, name) -> name in groupNames
@@ -26,10 +27,8 @@ class AppUpdater
 		log.info "Pushing update task in queue"
 
 		@queue.push
-			func: (cb) =>
+			fn: (cb) =>
 				@update globalGroups, groups, cb
-			meta:
-				timestamp: Date.now()
 		, cb
 
 	update: (globalGroups, groups, cb) ->
@@ -65,9 +64,9 @@ class AppUpdater
 				message.push "Installing: #{map(appsToChange.install, "applicationName").join ", "}" if appsToChange.install.length
 				message.push "Removing: #{appsToChange.remove.join ", "}"                            if appsToChange.remove.length
 
-				@state.publishNamespacedState
+				@state.sendNsState
 					updateState:
-						short: "Updating applications..."
+						short: "Updating applications ..."
 						long:  message.join "\n"
 
 				async.series [
@@ -88,23 +87,26 @@ class AppUpdater
 
 			if error
 				log.error "Error during update: #{error.message}"
-				@state.publishNamespacedState
+				@state.sendNsState
 					updateState:
-						short: "ERROR!"
+						short: "ERROR"
 						long:  error.message
 
 				return cb error
 
 			log.info "Updating done"
-			@state.publishNamespacedState
+			@state.sendNsState
 				updateState:
 					short: "Idle"
 					long:  "Idle"
 			cb()
 
 	removeApps: (apps, cb) ->
-		async.eachSeries apps, (app, cb) =>
-			@docker.removeContainer id: app, force: true, cb
+		async.each apps, (app, cb) =>
+			@docker.removeContainer
+				id:    app
+				force: true
+			, cb
 		, cb
 
 	installApps: (apps, cb) ->
@@ -112,15 +114,6 @@ class AppUpdater
 			log.info "Installing #{appConfig.containerName} ..."
 			@installApp appConfig, cb
 		, cb
-
-	isPastLastInstallStep: (currentStepName, endStepName) ->
-		return false unless endStepName?
-
-		steps = [ "Pull", "Clean", "Create", "Start" ]
-
-		currentStep = steps.indexOf(currentStepName) + 1
-		endStep     = steps.indexOf(endStepName)     + 1
-		currentStep > endStep
 
 	installApp: (appConfig, cb) ->
 		containerInfo = @normalizeAppConfiguration appConfig
@@ -139,6 +132,7 @@ class AppUpdater
 
 				@docker.getContainerByName containerInfo.name, (error, container) =>
 					return next() unless container
+
 					@docker.removeContainer id: containerInfo.name, force: true, next
 			(next) =>
 				return next() if @isPastLastInstallStep "Create", appConfig.lastInstallStep
@@ -153,6 +147,15 @@ class AppUpdater
 
 			log.info "Application #{containerInfo.name} installed correctly"
 			cb()
+
+	isPastLastInstallStep: (currentStepName, endStepName) ->
+		return false unless endStepName?
+
+		steps = [ "Pull", "Clean", "Create", "Start" ]
+
+		currentStep = steps.indexOf(currentStepName) + 1
+		endStep     = steps.indexOf(endStepName)     + 1
+		currentStep > endStep
 
 	normalizeAppConfiguration: (appConfiguration) ->
 		name:         appConfiguration.containerName

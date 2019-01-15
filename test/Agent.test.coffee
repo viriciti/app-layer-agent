@@ -10,7 +10,6 @@ describe ".Agent", ->
 
 	before (done) ->
 		server = new mosca.Server port: config.mqtt.port
-
 		server.once "ready", done
 
 	after ->

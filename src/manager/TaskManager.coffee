@@ -14,23 +14,23 @@ class TaskManager extends EventEmitter
 		@queue      = async.queue @handleTask
 
 	handleTask: ({ name, fn, params, taskId, queuedOn }, cb) =>
+		baseProperties =
+			name:     @getTaskName name
+			params:   params
+			queuedOn: queuedOn
+			taskId:   taskId
+
 		fn ...params
 			.then =>
-				@finishTask
-					name:     @getTaskName name
-					params:   params
-					queuedOn: queuedOn
-					status:   "ok"
-					taskId:   taskId
+				@finishTask Object.assign {},
+					baseProperties
+					status: "ok"
 
 				cb()
 			.catch (error) =>
-				@finishTask
-					name:     @getTaskName name
-					params:   params
-					queuedOn: queuedOn
-					status:   "error"
-					taskId:   taskId
+				@finishTask Object.assign {},
+					baseProperties
+					status: "error"
 					error:
 						message: error.message
 						code:    error.code

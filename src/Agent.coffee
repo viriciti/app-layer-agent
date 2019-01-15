@@ -29,17 +29,7 @@ class Agent
 		@state       = new StateManager @client.fork(), @docker, @groupManager
 		@appUpdater  = new AppUpdater   @docker,        @state,  @groupManager
 
-		actionOptions =
-			appUpdater:   @appUpdater
-			docker:       @docker
-			groupManager: @groupManager
-			state:        @state
-			taskManager:  @taskManager
-
-		registerContainerActions actionOptions
-		registerImageActions     actionOptions
-		registerDeviceActions    actionOptions
-
+		@registerActionHandlers()
 		@client.subscribe ["commands/{id}/+", "devices/{id}/groups"]
 
 	onConnect: =>
@@ -131,10 +121,15 @@ class Agent
 		@state.publishLog data
 
 	registerActionHandlers: ->
-		appUpdater:   @appUpdater
-		docker:       @docker
-		groupManager: @groupManager
-		state:        @state
-		taskManager:  @taskManager
+		actionOptions =
+			appUpdater:   @appUpdater
+			docker:       @docker
+			groupManager: @groupManager
+			state:        @state
+			taskManager:  @taskManager
+
+		registerContainerActions actionOptions
+		registerImageActions     actionOptions
+		registerDeviceActions    actionOptions
 
 module.exports = Agent
