@@ -1,9 +1,9 @@
-MQTTPattern              = require "mqtt-pattern"
-assert                   = require "assert"
-config                   = require "config"
-mosca                    = require "mosca"
-spy                      = require "spy"
-{ isArray, every, some } = require "lodash"
+MQTTPattern     = require "mqtt-pattern"
+assert          = require "assert"
+config          = require "config"
+mosca           = require "mosca"
+spy             = require "spy"
+{ every, some } = require "lodash"
 
 Client = require "../src/Client"
 
@@ -20,8 +20,7 @@ describe ".Client", ->
 	server = null
 
 	before (done) ->
-		server      = new mosca.Server port: config.mqtt.port
-
+		server = new mosca.Server port: config.mqtt.port
 		server.once "ready", done
 
 	after ->
@@ -35,9 +34,9 @@ describe ".Client", ->
 		client                     = new Client
 		{ topic, payload, retain } = client.getWill()
 
-		assert.ok MQTTPattern.matches "devices/+/status", topic
-		assert.ok payload
-		assert.ok retain
+		assert.ok    MQTTPattern.matches "devices/+/status", topic
+		assert.equal payload, "offline"
+		assert.equal retain,  true
 
 	it "should support placeholders", ->
 		{ clientId } = config.mqtt
@@ -52,12 +51,8 @@ describe ".Client", ->
 		client       = new Client
 		granted      = await client.subscribe "test/{id}/ok"
 
-		assert.ok clientId
-		assert.ok isArray granted
 		assert.equal granted.length, 1
-
-		{ topic } = granted[0]
-		assert.equal topic, "test/#{clientId}/ok"
+		assert.equal granted[0].topic, "test/#{clientId}/ok"
 
 	it "should support mqtt patterns in topic", (done) ->
 		{ clientId } = config.mqtt
@@ -118,9 +113,10 @@ describe ".Client", ->
 
 		forked
 			.once "connect", ->
-				# fails if any of the expected names
-				# does not appear in the events list
-				assert.ok every expected, nameInList
+				setImmediate ->
+					# fails if any of the expected names
+					# does not appear in the events list
+					assert.ok every expected, nameInList
 			.once "close", (reason) ->
 				setImmediate ->
 					# fails if any of the expected names

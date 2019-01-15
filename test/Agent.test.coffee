@@ -72,7 +72,7 @@ describe.only ".Agent", ->
 		server.on "published", ({ topic, payload }) ->
 			return done() if topic is "devices/#{clientId}/status"
 
-	it "should send namespaced state after receiving groups", (done) ->
+	it "should send state after receiving groups", (done) ->
 		agent        = new Agent
 		{ clientId } = config.mqtt
 		done         = once done
@@ -80,15 +80,18 @@ describe.only ".Agent", ->
 		agent.start()
 
 		server.on "published", ({ topic, payload }) ->
-			if agent.client.subscribedTopics.includes "global/collections/+"
-				return done() if topic is "devices/test-device/state"
-			else
-				return unless topic.endsWith "new/subscribes"
+			if (
+				topic is "devices/test-device/state" and
+				agent.client.subscribedTopics.includes "global/collections/+"
+			)
+				return done()
 
-				payload = JSON.parse payload
-				unless payload.topic is "devices/#{clientId}/groups"
-					return
+			# wait for client to subscribe to groups topic
+			return unless topic.endsWith "new/subscribes"
 
-				server.publish
-					topic:   "devices/#{clientId}/groups"
-					payload: JSON.stringify ["default"]
+			payload = JSON.parse payload
+			return unless payload.topic is "devices/#{clientId}/groups"
+
+			server.publish
+				topic:   "devices/#{clientId}/groups"
+				payload: JSON.stringify ["default"]
