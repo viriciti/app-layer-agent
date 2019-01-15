@@ -60,7 +60,7 @@ class Agent
 			.on "devices/{id}/groups",  @onGroups
 			.on "global/collections/+", @onCollection
 
-		await @state.notifyOnlineStatus()
+		@state.notifyOnlineStatus()
 
 	onClose: =>
 		@taskManager

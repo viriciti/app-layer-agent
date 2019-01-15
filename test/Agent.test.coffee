@@ -99,6 +99,7 @@ describe ".Agent", ->
 	it "should update groups", (done) ->
 		{ clientId }     = config.mqtt
 		agent            = new Agent
+		done             = once done
 		mockGroupManager =
 			updateGroups: (payload) ->
 				assert.deepStrictEqual payload, ["default"]

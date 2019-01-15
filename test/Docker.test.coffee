@@ -109,3 +109,14 @@ describe ".Docker", ->
 			assert.ifError stream
 			assert.equal error.statusCode, 502
 			done()
+
+	it "should be able to return a shortened image id", ->
+		docker    = new Docker
+
+		hash      = "sha256:87f1a6e84e0012a52c1a176619256c3f0222591b78a266188f9fc983a383b64a"
+		shortened = docker.getShortenedImageId hash
+		assert.equal shortened, "87f1a6e84e00"
+
+		hash      = "87f1a6e84e0012a52c1a176619256c3f0222591b78a266188f9fc983a383b64a"
+		shortened = docker.getShortenedImageId hash
+		assert.equal hash, shortened
