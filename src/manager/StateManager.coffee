@@ -1,7 +1,5 @@
 _             = require "lodash"
-async         = require "async"
 config        = require "config"
-debug         = (require "debug") "app: StateManager"
 { promisify } = require "util"
 
 pkg            = require "../../package.json"
@@ -21,6 +19,8 @@ class StateManager
 		@throttledSendAppState = _.throttle @sendAppStateToMqtt, config.state.sendAppStateThrottleTime
 
 	publish: (options, cb) =>
+		throw new Error ".publish no longer supports callbacks" if cb
+
 		message = options.message
 		message = JSON.stringify message unless _.isString message
 		topic   = [
@@ -31,10 +31,7 @@ class StateManager
 			.join "/"
 			.replace /\/{2,}/, "/"
 
-		if cb
-			@socket.publish topic, message, options.opts, cb
-		else
-			promisify(@socket.publish.bind @socket) topic, message, options.opts
+		promisify(@socket.publish.bind @socket) topic, message, options.opts
 
 	sendStateToMqtt: =>
 		state       = await @generateStateObject()
@@ -51,18 +48,10 @@ class StateManager
 
 		log.info "State published"
 
-	sendAppStateToMqtt: (cb) =>
-		@docker.listContainers (error, containers) =>
-			return cb? error if error
-
-			@publish
-				topic:   "nsState/containers"
-				message: containers
-			, (error) ->
-				return cb? error if error
-
-				debug "App state published"
-				cb?()
+	sendAppStateToMqtt: =>
+		@publish
+			topic:   "nsState/containers"
+			message: await promisify(@docker.listContainers.bind @docker)()
 
 	notifyOnlineStatus: =>
 		@publish
@@ -75,8 +64,6 @@ class StateManager
 			topic:   "logs"
 			message: { type, message, time }
 			opts:    retain: true
-		, (error) ->
-			return log.error "Error while publishing log: #{error.message}" if error
 
 	sendNsState: (nsState) ->
 		return unless isPlainObject nsState
@@ -95,8 +82,8 @@ class StateManager
 	generateStateObject: ->
 		[images, containers, systemInfo] = await Promise.all [
 			promisify(@docker.listImages.bind @docker)()
-			promisify(@docker.listContainers.bind @docker)()
-			promisify(@docker.getDockerInfo.bind @docker)()
+			@docker.listContainers()
+			@docker.getDockerInfo()
 		]
 
 		groups     = @groupManager.getGroups()

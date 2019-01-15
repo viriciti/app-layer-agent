@@ -42,18 +42,20 @@ class AppUpdater
 
 		async.waterfall [
 			(next) =>
-				@docker.listContainers (error, containers) ->
-					return next error if error
+				@docker
+					.listContainers()
+					.then (containers) ->
+						currentApps = containers.reduce (keyedContainers, container) ->
+							return keyedContainers if container.name in config.docker.container.whitelist
 
-					currentApps = containers.reduce (keyedContainers, container) ->
-						return keyedContainers if container.name in config.docker.container.whitelist
+							{ keyedContainers..., [container.name]: container }
+						, {}
+						extendedGroups = createGroupsMixin globalGroups,   groups
+						appsToChange   = getAppsToChange   extendedGroups, currentApps
 
-						{ keyedContainers..., [container.name]: container }
-					, {}
-					extendedGroups = createGroupsMixin globalGroups,   groups
-					appsToChange   = getAppsToChange   extendedGroups, currentApps
-
-					next null, appsToChange
+						next null, appsToChange
+					.catch (error) ->
+						next error
 			(appsToChange, next) =>
 				return setImmediate next unless (
 					appsToChange.install.length or
@@ -103,10 +105,13 @@ class AppUpdater
 
 	removeApps: (apps, cb) ->
 		async.each apps, (app, cb) =>
-			@docker.removeContainer
-				id:    app
-				force: true
-			, cb
+			@docker
+				.removeContainer
+					id:    app
+					force: true
+				.then ->
+					cb()
+				.catch cb
 		, cb
 
 	installApps: (apps, cb) ->

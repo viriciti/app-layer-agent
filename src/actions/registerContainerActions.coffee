@@ -6,7 +6,7 @@ registerFunction = require "../helpers/registerFunction"
 module.exports = ({ taskManager, docker }) ->
 	onRemoveContainer = ({ id, force = true }) ->
 		debug "Removing container '#{id}'"
-		await promisify(docker.removeContainer.bind docker) { id, force }
+		await docker.removeContainer { id, force }
 
 	onRestartContainer = ({ id }) ->
 		debug "Restarting container '#{id}'"

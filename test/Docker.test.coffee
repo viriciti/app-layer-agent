@@ -11,10 +11,6 @@ mockDockerPull = (docker, returnStatusCode = 200) ->
 	docker
 		.dockerClient
 		.pull = (name, options, cb) ->
-			if _.isFunction options
-				cb      = options
-				options = {}
-
 			setTimeout ->
 				error            = new Error
 				error.statusCode = returnStatusCode
@@ -86,16 +82,16 @@ describe ".Docker", ->
 
 			docker.stop()
 
-	it "should not retry if status code is 500", (done) ->
+	it "should not retry if status code is 500", ->
 		docker = new Docker
 		docker = mockDockerPull docker, 500
 
-		docker.pullImage "hello-world", (error, stream) ->
-			assert.ifError stream
+		try
+			await docker.pullImage "hello-world"
+		catch error
 			assert.equal error.statusCode, 500
-			done()
 
-	it "should retry if status code is 502", (done) ->
+	it "should retry if status code is 502", ->
 		docker                             = new Docker
 		docker                             = mockDockerPull docker, 502
 		date                               = Date.now()
@@ -103,12 +99,12 @@ describe ".Docker", ->
 		{ maxAttempts }                    = config.docker.retry
 		expectedMinimumWaitingTime         = ((maxWaitingTime - minWaitingTime) + minWaitingTime) * maxAttempts
 
-		docker.pullImage "hello-world", (error, stream) ->
-			return done new Error "Callback was called too early" if (Date.now() - date) > expectedMinimumWaitingTime
+		try
+			await docker.pullImage "hello-world"
+		catch error
+			return new Error "Callback was called too early" if (Date.now() - date) > expectedMinimumWaitingTime
 
-			assert.ifError stream
 			assert.equal error.statusCode, 502
-			done()
 
 	it "should be able to return a shortened image id", ->
 		docker    = new Docker
@@ -120,3 +116,11 @@ describe ".Docker", ->
 		hash      = "87f1a6e84e0012a52c1a176619256c3f0222591b78a266188f9fc983a383b64a"
 		shortened = docker.getShortenedImageId hash
 		assert.equal hash, shortened
+
+	it "should be able to get info", ->
+		docker = new Docker
+		info   = await docker.getDockerInfo()
+
+		assert.ok info.apiVersion
+		assert.ok info.version
+		assert.ok info.kernel

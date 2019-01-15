@@ -1,8 +1,8 @@
 { EventEmitter }                             = require "events"
 async                                        = require "async"
-debug                                        = (require "debug") "app:Docker"
+debug                                        = (require "debug") "app: Docker"
 Dockerode                                    = require "dockerode"
-{ every, isEmpty, compact, random }          = require "lodash"
+{ every, isEmpty, compact, random, pick }    = require "lodash"
 { filterUntaggedImages, getRemovableImages } = require "@viriciti/app-layer-logic"
 config                                       = require "config"
 
@@ -47,55 +47,55 @@ class Docker extends EventEmitter
 		@dockerEventStream.removeListener "data",  @handleStreamData
 		@dockerEventStream.push null
 
-	getDockerInfo: (cb) =>
-		@dockerClient.version (error, info) ->
-			return cb error if error
+	getDockerInfo: =>
+		info = await @dockerClient.version()
 
-			cb null,
-				apiVerion: info.ApiVersion
-				version:   info.Version
-				kernel:    info.KernelVersion
+		apiVersion: info.ApiVersion
+		version:    info.Version
+		kernel:     info.KernelVersion
 
-	pullImage: ({ name }, cb) =>
+	pullImage: ({ name }) =>
 		log.info "Pulling image '#{name}'..."
 
-		credentials  = null
-		credentials  = config.docker.registryAuth.credentials if every config.docker.registryAuth.credentials
-		retryIn      = 1000 * 60
-		pullInterval = setInterval =>
-			@emit "logs",
-				message: "Pulling #{name}"
-				image: name
-				type:  "action"
-				time:  Date.now()
-		, 3000
+		new Promise (resolve, reject) =>
+			credentials  = null
+			credentials  = config.docker.registryAuth.credentials if every config.docker.registryAuth.credentials
+			retryIn      = 1000 * 60
+			pullInterval = setInterval =>
+				@emit "logs",
+					message: "Pulling #{name}"
+					image: name
+					type:  "action"
+					time:  Date.now()
+			, 3000
 
-		async.retry
-			times: config.docker.retry.maxAttempts
-			interval: ->
-				retryIn
-			errorFilter: (error) ->
-				return false unless error.statusCode in config.docker.retry.errorCodes
+			async.retry
+				times: config.docker.retry.maxAttempts
+				interval: ->
+					retryIn
+				errorFilter: (error) ->
+					return false unless error.statusCode in config.docker.retry.errorCodes
 
-				retryIn = random config.docker.retry.minWaitingTime, config.docker.retry.maxWaitingTime
-				log.warn "Pulling #{name} failed, retrying after #{retryIn}ms"
+					retryIn = random config.docker.retry.minWaitingTime, config.docker.retry.maxWaitingTime
+					log.warn "Pulling #{name} failed, retrying after #{retryIn}ms"
 
-				true
-		, (next) =>
-			@dockerClient.pull name, { authconfig: credentials }, (error, stream) =>
-				if error
-					if error.message.match /unauthorized/
-						log.error "No permission to pull #{name}"
-					else unless error.statusCode in config.docker.retry.errorCodes
-						log.error error.message
+					true
+			, (next) =>
+				@dockerClient.pull name, { authconfig: credentials }, (error, stream) =>
+					if error
+						if error.message.match /unauthorized/
+							log.error "No permission to pull #{name}"
+						else unless error.statusCode in config.docker.retry.errorCodes
+							log.error error.message
 
-					return next error
+						return next error
 
-				@dockerClient.modem.followProgress stream, next
-		, (error) ->
-			clearInterval pullInterval
+					@dockerClient.modem.followProgress stream, next
+			, (error) ->
+				clearInterval pullInterval
 
-			cb error
+				return reject error if error
+				resolve()
 
 	listImages: (cb) =>
 		debug "Listing images ..."
@@ -182,28 +182,17 @@ class Docker extends EventEmitter
 				log.info "Removed image #{entity} successfully"
 				cb()
 
-	listContainers: (cb) =>
-		@dockerClient.listContainers all: true, (error, containers) =>
-			return cb error if error
+	listContainers: =>
+		containers         = await @dockerClient.listContainers all: true
+		containersDetailed = await Promise.all containers.map (container) =>
+			# container.Names is an array of names in the format "/name"
+			# Only the first name after the slash is needed
+			@getContainerByName container.Names[0].replace "/", ""
 
-			async.map containers, (container, next) =>
-				# container.Names is an array of names in the format "/name".
-				# Only the first name after the slash is needed.
-				@getContainerByName container.Names[0].replace("/", ""), (err, containerByName) ->
-					return next()     unless containerByName
-					return next error if error
+		compact containersDetailed
 
-					next null, containerByName
-			, (error, formattedContainers) ->
-				return cb error if error
-				cb null, compact formattedContainers
-
-	getContainerByName: (name, cb) =>
-		@dockerClient
-			.getContainer name
-			.inspect size: 1, (error, info) =>
-				return cb error if error
-				cb null, @serializeContainer info
+	getContainerByName: (name) =>
+		@serializeContainer await @dockerClient.getContainer(name).inspect size: 1
 
 	serializeContainer: (containerInfo) ->
 		Id            : containerInfo.Id
@@ -267,29 +256,18 @@ class Docker extends EventEmitter
 
 				cb null, "Container #{id} restarted correctly"
 
-	removeContainer: ({ id, force = false }, cb) ->
+	removeContainer: ({ id, force = false }) ->
 		log.info "Removing container '#{id}'"
 
-		@listContainers (error, containers) =>
-			if error
-				log.error "Error listing containers: #{error.message}"
-				return cb error
+		containers = await @listContainers()
+		toRemove   = containers.filter (c) -> c.name.includes id
 
-			toRemove = containers.filter (c) -> c.name.includes id
+		await Promise.all toRemove.map (container) =>
+			@dockerclient
+				.getContainer container.Id
+				.remove force: force
 
-			async.eachSeries toRemove, (c, cb) =>
-				@dockerClient.getContainer(c.Id).remove { force }, (error) ->
-					if error
-						log.error "Error removing '#{id}': #{error.message}"
-
-					cb error
-			, (error) ->
-				if error
-					log.error "Error in removing one of the containers"
-				else
-					log.info "Removed container '#{id}'"
-
-				cb error
+		log.info "Removed #{toRemove.length} containers"
 
 	getContainerLogs: ({ id }, cb) ->
 		container = @dockerClient.getContainer id
