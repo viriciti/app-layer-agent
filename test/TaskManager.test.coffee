@@ -138,7 +138,7 @@ describe ".TaskManager", ->
 			name:   "hello-world"
 			params: ["a"]
 
-	it.only "should add an error status if a task fails", (done) ->
+	it "should add an error status if a task fails", (done) ->
 		manager    = new TaskManager client
 		error      = new Error "Well, this failed"
 		error.code = 15

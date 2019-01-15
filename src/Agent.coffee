@@ -108,7 +108,7 @@ class Agent
 				statusCode: "ERROR"
 
 	onGroups: (topic, payload) =>
-		@groupManager.updateGroups payload
+		@groupManager.updateGroups JSON.parse payload
 
 	onCollection: (topic, payload) =>
 		@appUpdater.handleCollection JSON.parse payload

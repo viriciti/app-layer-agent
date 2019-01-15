@@ -95,3 +95,24 @@ describe ".Agent", ->
 			server.publish
 				topic:   "devices/#{clientId}/groups"
 				payload: JSON.stringify ["default"]
+
+	it "should update groups", (done) ->
+		{ clientId }     = config.mqtt
+		agent            = new Agent
+		mockGroupManager =
+			updateGroups: (payload) ->
+				assert.deepStrictEqual payload, ["default"]
+				done()
+
+		agent.start()
+		agent.groupManager = mockGroupManager
+
+		server.on "published", ({ topic, payload }) ->
+			return unless topic.endsWith "new/subscribes"
+
+			payload = JSON.parse payload
+			return unless payload.topic is "devices/#{clientId}/groups"
+
+			server.publish
+				topic:   "devices/#{clientId}/groups"
+				payload: JSON.stringify ["default"]

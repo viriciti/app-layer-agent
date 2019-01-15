@@ -32,7 +32,8 @@ class TaskManager extends EventEmitter
 					status:   "error"
 					taskId:   taskId
 					error:
-						message: error
+						message: error.message
+						code:    error.code
 
 				cb error
 
@@ -43,7 +44,7 @@ class TaskManager extends EventEmitter
 			params:   params
 			taskId:   uniqueId()
 			queuedOn: Date.now()
-		, =>
+		, (error) =>
 			@emit "done",
 				name:   @getTaskName name
 				params: params
