@@ -1,8 +1,12 @@
-path = require "path"
+path       = require "path"
+{ random } = require "lodash"
 
 module.exports =
 	mqtt:
-		clientId: "test-device"
+		port:            random 5000, 5500
+		clientId:        "test-device"
+		extraOptions:
+			reconnectPeriod: 100
 
 	docker:
 		socketPath: "/var/run/docker.sock"

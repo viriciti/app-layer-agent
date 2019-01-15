@@ -1,8 +1,9 @@
-MQTTPattern                      = require "mqtt-pattern"
-assert                           = require "assert"
-mosca                            = require "mosca"
-spy                              = require "spy"
-{ random, isArray, every, some } = require "lodash"
+MQTTPattern              = require "mqtt-pattern"
+assert                   = require "assert"
+config                   = require "config"
+mosca                    = require "mosca"
+spy                      = require "spy"
+{ isArray, every, some } = require "lodash"
 
 Client = require "../src/Client"
 
@@ -10,22 +11,16 @@ doneAfter = (calls, done) ->
 	throw new Error "Minimum call count is 1"  if calls < 1
 	throw new Error "Maximum call count is 15" if calls > 15
 
-	watcher  = spy (error) ->
+	watcher = spy (error) ->
 		done() if (watcher.callCount + 1) >= calls
 
 	watcher
 
 describe ".Client", ->
-	port        = random 5000, 10000
-	server      = null
-	mqttOptions = null
+	server = null
 
 	before (done) ->
-		server      = new mosca.Server port: port
-		mqttOptions =
-			clientId:        "app-layer-agent-tester"
-			port:            port
-			reconnectPeriod: 100
+		server      = new mosca.Server port: config.mqtt.port
 
 		server.once "ready", done
 
@@ -33,11 +28,11 @@ describe ".Client", ->
 		server.close()
 
 	it "should be able to connect", ->
-		client = new Client mqttOptions
+		client = new Client
 		client.connect()
 
 	it "should have a last will and testament (LWT)", ->
-		client                     = new Client mqttOptions
+		client                     = new Client
 		{ topic, payload, retain } = client.getWill()
 
 		assert.ok MQTTPattern.matches "devices/+/status", topic
@@ -45,16 +40,16 @@ describe ".Client", ->
 		assert.ok retain
 
 	it "should support placeholders", ->
-		{ clientId } = mqttOptions
-		client       = new Client mqttOptions
+		{ clientId } = config.mqtt
+		client       = new Client
 		topic        = client.expandTopic "test/{id}/abc"
 		expected     = "test/#{clientId}/abc"
 
 		assert.equal topic, expected
 
 	it "should replace placeholders when subscribing", ->
-		client       = new Client mqttOptions
-		{ clientId } = mqttOptions
+		{ clientId } = config.mqtt
+		client       = new Client
 		granted      = await client.subscribe "test/{id}/ok"
 
 		assert.ok clientId
@@ -65,8 +60,8 @@ describe ".Client", ->
 		assert.equal topic, "test/#{clientId}/ok"
 
 	it "should support mqtt patterns in topic", (done) ->
-		client       = new Client mqttOptions
-		{ clientId } = mqttOptions
+		{ clientId } = config.mqtt
+		client       = new Client
 		done         = doneAfter 3, done
 
 		client.once "test/{id}/ok", done
@@ -84,57 +79,54 @@ describe ".Client", ->
 
 	it "should throw if attempting to fork an unconnected client", ->
 		assert.throws ->
-			client = new Client mqttOptions
+			client = new Client
 			client.fork()
 
 	it "should allow mqtt instance to be extracted", ->
-		client = new Client mqttOptions
+		client = new Client
 
-		await client.connect()
+		client.connect()
 		forked = client.fork()
 
 		assert.equal client.mqtt, forked
 
-	it "should be able reconnect", (done) ->
+	it "should be able to reconnect", (done) ->
 		done   = doneAfter 3, done
-		client = new Client mqttOptions
+		client = new Client
+
+		client.connect()
 
 		client
-			.connect()
-			.then ->
-				client
-					.fork()
-					.once "offline",   done
-					.once "close",     done
-					.once "reconnect", done
+			.fork()
+			.once "offline",   done
+			.once "close",     done
+			.once "reconnect", done
 
-				server.once "clientConnected", (socket) ->
-					socket.close()
+		server.once "clientConnected", (socket) ->
+			socket.close()
 
 		null
 
 	it "should remove listeners when client connection closes", (done) ->
-		client = new Client { ...mqttOptions, reconnectPeriod: 0 }
+		client = new Client
 
-		client
-			.connect()
-			.then ->
-				forked     = client.fork()
-				expected   = ["packetreceive", "error", "reconnect", "offline"]
-				nameInList = (name) -> name in Object.keys forked._events
+		client.connect()
 
-				forked
-					.once "connect", ->
-						# fails if any of the expected names
-						# does not appear in the events list
-						assert.ok every expected, nameInList
-					.once "close", (reason) ->
-						# fails if any of the expected names
-						# appears in the events list
-						assert.equal false, some expected, nameInList
-						done()
+		forked     = client.fork()
+		expected   = ["packetreceive", "error", "reconnect", "offline"]
+		nameInList = (name) -> name in Object.keys forked._events
 
-				server.once "clientConnected", (socket) ->
-					socket.close()
+		forked
+			.once "connect", ->
+				# fails if any of the expected names
+				# does not appear in the events list
+				assert.ok every expected, nameInList
+			.once "close", (reason) ->
+				setImmediate ->
+					# fails if any of the expected names
+					# appears in the events list
+					assert.equal false, some expected, nameInList
+					done()
 
-		null
+		server.once "clientConnected", (socket) ->
+			socket.close()

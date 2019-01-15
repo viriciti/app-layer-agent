@@ -1,15 +1,17 @@
-MQTTPattern                       = require "mqtt-pattern"
-mqtt                              = require "mqtt"
-{ EventEmitter }                  = require "events"
-{ omit, every, isArray, forEach } = require "lodash"
-{ promisify }                     = require "util"
+MQTTPattern                             = require "mqtt-pattern"
+config                                  = require "config"
+mqtt                                    = require "mqtt"
+{ EventEmitter }                        = require "events"
+{ omit, every, isArray, forEach, uniq } = require "lodash"
+{ promisify }                           = require "util"
 
 log = require("./lib/Logger") "Client"
 
 class Client extends EventEmitter
-	constructor: (@options) ->
+	constructor: ->
 		super()
 
+		@options  = config.mqtt
 		@clientId = @options.clientId
 		@options  = { ...@options, ...@options.extraOptions, will: @getWill() }
 		@options  = omit @options, "tls" unless every @options.tls
@@ -19,12 +21,8 @@ class Client extends EventEmitter
 		@subscribedTopics = []
 
 	connect: ->
-		new Promise (resolve) =>
-			@mqtt = mqtt.connect @options
-
-			@mqtt
-				.once "connect", resolve
-				.on   "connect", @onConnect
+		@mqtt = mqtt.connect @options
+		@mqtt.on "connect", @onConnect
 
 	onConnect: =>
 		@mqtt
@@ -80,10 +78,11 @@ class Client extends EventEmitter
 		@mqtt
 
 	subscribe: (topics) ->
-		await @connect() unless @mqtt
+		@connect() unless @mqtt
 
-		topics = [topics] unless isArray topics
-		topics = topics.map @expandTopic
+		topics            = [topics] unless isArray topics
+		topics            = topics.map @expandTopic
+		@subscribedTopics = uniq @subscribedTopics.concat topics
 
 		promisify(@mqtt.subscribe.bind @mqtt) topics
 

@@ -1,14 +1,14 @@
 { last, isArray, map } = require "lodash"
-config            = require "config"
+config                 = require "config"
 
 log = require("./lib/Logger") "Agent"
 
-Docker       = require "./lib/Docker"
-AppUpdater   = require "./manager/AppUpdater"
-StateManager = require "./manager/StateManager"
-GroupManager = require "./manager/GroupManager"
-TaskManager  = require "./manager/TaskManager"
-Client       = require "./Client"
+Docker                   = require "./lib/Docker"
+AppUpdater               = require "./manager/AppUpdater"
+StateManager             = require "./manager/StateManager"
+GroupManager             = require "./manager/GroupManager"
+TaskManager              = require "./manager/TaskManager"
+Client                   = require "./Client"
 registerContainerActions = require "./actions/registerContainerActions"
 registerImageActions     = require "./actions/registerImageActions"
 registerDeviceActions    = require "./actions/registerDeviceActions"
@@ -19,15 +19,15 @@ class Agent
 		@docker       = new Docker
 		@groupManager = new GroupManager
 
+		@client.connect()
+
 		@client
 			.on "connect", @onConnect
 			.on "close",   @onClose
 
-		await @client.connect()
-
-		@taskManager = new TaskManager @client.fork()
+		@taskManager = new TaskManager  @client.fork()
 		@state       = new StateManager @client.fork(), @docker, @groupManager
-		@appUpdater  = new AppUpdater @docker, @state, @groupManager
+		@appUpdater  = new AppUpdater   @docker,        @state,  @groupManager
 
 		actionOptions =
 			appUpdater:   @appUpdater
@@ -40,7 +40,7 @@ class Agent
 		registerImageActions     actionOptions
 		registerDeviceActions    actionOptions
 
-		await @client.subscribe ["commands/{id}/+", "devices/{id}/groups"]
+		@client.subscribe ["commands/{id}/+", "devices/{id}/groups"]
 
 	onConnect: =>
 		@taskManager
