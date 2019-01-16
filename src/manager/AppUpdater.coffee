@@ -137,12 +137,13 @@ class AppUpdater
 		Image:        appConfiguration.fromImage
 		Labels:       appConfiguration.labels #NOTE https://docs.docker.com/config/labels-custom-metadata/#value-guidelines
 		HostConfig:
-			Mounts:        @bindsToMounts appConfiguration.mounts
+			Binds:         appConfiguration.mounts
 			NetworkMode:   appConfiguration.networkMode
 			Privileged:    not not appConfiguration.privileged
 			RestartPolicy: Name: appConfiguration.restartPolicy
 			PortBindings:  appConfiguration.ports
 
+	# unused for now
 	bindsToMounts: (binds) ->
 		binds.map (bind) ->
 			[source, target, ro] = bind.split ":"
