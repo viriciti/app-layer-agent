@@ -21,7 +21,7 @@ mockDockerPull = (docker, returnStatusCode = 200) ->
 
 	docker
 
-describe ".Docker", ->
+describe.only ".Docker", ->
 	it "should list removable images", ->
 		{ allImages, runningContainers } = require "../meta/running-images"
 		toRemove                         = getRemovableImages runningContainers, allImages
@@ -73,14 +73,18 @@ describe ".Docker", ->
 
 	it "should remove untagged images", (done) ->
 		docker = new Docker
-		docker.removeUntaggedImages (error, data) ->
-			throw error if error
-			docker
-				.dockerEventStream
-				.once "end", ->
-					done()
 
-			docker.stop()
+		docker
+			.removeUntaggedImages()
+			.then ->
+				docker
+					.dockerEventStream
+					.once "end", ->
+						done()
+
+				docker.stop()
+
+		null
 
 	it "should not retry if status code is 500", ->
 		docker = new Docker

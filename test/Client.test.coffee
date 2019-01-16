@@ -109,7 +109,7 @@ describe ".Client", ->
 
 		forked     = client.fork()
 		expected   = ["packetreceive", "error", "reconnect", "offline"]
-		nameInList = (name) -> name in Object.keys forked._events
+		nameInList = (name) -> name in Object.keys forked._client._events
 
 		forked
 			.once "connect", ->
@@ -126,3 +126,13 @@ describe ".Client", ->
 
 		server.once "clientConnected", (socket) ->
 			socket.close()
+
+	it "should be able to create topic", ->
+		{ clientId } = config.mqtt
+		client       = new Client
+
+		topicWithRoot    = "devices/#{clientId}/abc/def"
+		topicWithoutRoot = "/abc/def"
+
+		assert.equal topicWithRoot, client.createTopic topicWithRoot
+		assert.equal topicWithRoot, client.createTopic topicWithoutRoot

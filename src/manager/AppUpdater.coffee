@@ -1,5 +1,5 @@
 { isEmpty, pickBy, first, debounce, map } = require "lodash"
-async                                     = require "async"
+queue                                     = require "async.queue"
 debug                                     = (require "debug") "app:AppUpdater"
 { createGroupsMixin, getAppsToChange }    = require "@viriciti/app-layer-logic"
 log                                       = (require "../lib/Logger") "AppUpdater"
@@ -8,7 +8,7 @@ config                                    = require "config"
 class AppUpdater
 	constructor: (@docker, @state, @groupManager) ->
 		@handleCollection = debounce @handleCollection, 2000
-		@queue            = async.queue @handleUpdate
+		@queue            = queue @handleUpdate
 
 	handleUpdate: ({ fn }, cb) ->
 		fn cb
@@ -23,135 +23,103 @@ class AppUpdater
 			return log.error error.message if error
 			log.info "Device updated correctly!"
 
-	queueUpdate: (globalGroups, groups, cb) ->
+	queueUpdate: (globalGroups, groups) ->
 		log.info "Pushing update task in queue"
 
 		@queue.push
 			fn: (cb) =>
-				@update globalGroups, groups, cb
-		, cb
+				@update globalGroups, groups
+					.then -> cb()
+					.catch cb
 
-	update: (globalGroups, groups, cb) ->
+	update: (globalGroups, groups) ->
 		debug "Updating..."
 		debug "Global groups are", globalGroups
 		debug "Device groups are", groups
 
-		return cb new Error "No global groups"                if isEmpty globalGroups
-		return cb new Error "No default group"                unless globalGroups["default"]
-		return cb new Error "Default group must appear first" unless first(Object.keys globalGroups) is "default"
+		return new Error "No global groups"                if isEmpty globalGroups
+		return new Error "No default group"                unless globalGroups["default"]
+		return new Error "Default group must appear first" unless first(Object.keys globalGroups) is "default"
 
-		async.waterfall [
-			(next) =>
-				@docker
-					.listContainers()
-					.then (containers) ->
-						currentApps = containers.reduce (keyedContainers, container) ->
-							return keyedContainers if container.name in config.docker.container.whitelist
+		containers  = await @docker.listContainers()
+		currentApps = containers.reduce (keyedContainers, container) ->
+			return keyedContainers if container.name in config.docker.container.whitelist
 
-							{ keyedContainers..., [container.name]: container }
-						, {}
-						extendedGroups = createGroupsMixin globalGroups,   groups
-						appsToChange   = getAppsToChange   extendedGroups, currentApps
+			{ keyedContainers..., [container.name]: container }
+		, {}
+		extendedGroups = createGroupsMixin globalGroups,   groups
+		appsToChange   = getAppsToChange   extendedGroups, currentApps
 
-						next null, appsToChange
-					.catch (error) ->
-						next error
-			(appsToChange, next) =>
-				return setImmediate next unless (
-					appsToChange.install.length or
-					appsToChange.remove.length
-				)
+		return unless appsToChange.install.length or appsToChange.remove.length
 
-				message = []
-				message.push "Installing: #{map(appsToChange.install, "applicationName").join ", "}" if appsToChange.install.length
-				message.push "Removing: #{appsToChange.remove.join ", "}"                            if appsToChange.remove.length
+		message = []
 
-				@state.sendNsState
-					updateState:
-						short: "Updating applications ..."
-						long:  message.join "\n"
+		if appsToChange.install.length
+			message.push "Installing: #{map(appsToChange.install, "applicationName").join ", "}"
+			log.info "Installing #{appsToChange.install.length} application(s)"
+		else
+			log.warn "No applications to install"
 
-				async.series [
-					(cb) =>
-						@docker.removeUntaggedImages cb
-					(cb) =>
-						log.info "No apps to be removed" if isEmpty appsToChange.remove
-						@removeApps appsToChange.remove, cb
-					(cb) =>
-						log.info "No apps to be installed" if isEmpty appsToChange.install
-						@installApps appsToChange.install, cb
-					(cb) =>
-						@docker.removeOldImages cb
-				], next
+		if appsToChange.remove.length
+			message.push "Removing: #{appsToChange.remove.join ", "}"
+			log.info "Removing #{appsToChange.remove.length} application(s)"
+		else
+			log.warn "No applications to remove"
 
-		], (error) =>
-			@state.throttledSendState()
+		@state.sendNsState
+			updateState:
+				short: "Updating applications ..."
+				long:  message.join "\n"
 
-			if error
-				log.error "Error during update: #{error.message}"
-				@state.sendNsState
-					updateState:
-						short: "ERROR"
-						long:  error.message
+		try
+			await @docker.removeUntaggedImages()
+			await @removeApps appsToChange.remove
+			await @installApps appsToChange.install
+			await @docker.removeOldImages()
 
-				return cb error
-
-			log.info "Updating done"
 			@state.sendNsState
 				updateState:
 					short: "Idle"
 					long:  "Idle"
-			cb()
+		catch error
+			log.error "Failed to update: #{error.message}"
+			@state.sendNsState
+				updateState:
+					short: "ERROR"
+					long:  error.message
+		finally
+			@state.throttledSendState()
 
-	removeApps: (apps, cb) ->
-		async.each apps, (app, cb) =>
-			@docker
-				.removeContainer
-					id:    app
-					force: true
-				.then ->
-					cb()
-				.catch cb
-		, cb
+	removeApps: (apps) ->
+		await Promise.all apps.map (app) =>
+			@docker.removeContainer
+				id:    app
+				force: true
 
-	installApps: (apps, cb) ->
-		async.eachSeries apps, (appConfig, cb) =>
-			log.info "Installing #{appConfig.containerName} ..."
-			@installApp appConfig, cb
-		, cb
+	installApps: (apps) ->
+		await Promise.all apps.map (app) =>
+			@installApp app
 
-	installApp: (appConfig, cb) ->
+	installApp: (appConfig) ->
 		containerInfo = @normalizeAppConfiguration appConfig
 
-		async.series [
-			(next) =>
-				return next() if @isPastLastInstallStep "Pull", appConfig.lastInstallStep
+		return if @isPastLastInstallStep "Pull", appConfig.lastInstallStep
+		await @docker.pullImage name: containerInfo.Image
 
-				@docker.pullImage name: containerInfo.Image, (error) ->
-					return next error if error
+		return if @isPastLastInstallStep "Clean", appConfig.lastInstallStep
 
-					log.info "Image #{containerInfo.Image} pulled correctly"
-					next()
-			(next) =>
-				return next() if @isPastLastInstallStep "Clean", appConfig.lastInstallStep
+		container = await @docker.getContainerByName containerInfo.name
+		return unless container
 
-				@docker.getContainerByName containerInfo.name, (error, container) =>
-					return next() unless container
+		await @docker.removeContainer id: containerInfo.name, force: true
 
-					@docker.removeContainer id: containerInfo.name, force: true, next
-			(next) =>
-				return next() if @isPastLastInstallStep "Create", appConfig.lastInstallStep
+		return if @isPastLastInstallStep "Create", appConfig.lastInstallStep
+		await @docker.createContainer containerProps: containerInfo
 
-				@docker.createContainer containerProps: containerInfo, next
-			(next) =>
-				return next() if @isPastLastInstallStep "Start", appConfig.lastInstallStep
+		return if @isPastLastInstallStep "Start", appConfig.lastInstallStep
+		await @docker.startContainer id: containerInfo.name
 
-				@docker.startContainer id: containerInfo.name, next
-		], (error, result) ->
-			return cb error if error
-
-			log.info "Application #{containerInfo.name} installed correctly"
-			cb()
+		log.info "Application #{containerInfo.name} installed correctly"
 
 	isPastLastInstallStep: (currentStepName, endStepName) ->
 		return false unless endStepName?

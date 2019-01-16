@@ -18,9 +18,7 @@ class StateManager
 		@throttledSendState    = _.throttle @sendStateToMqtt,    config.state.sendStateThrottleTime
 		@throttledSendAppState = _.throttle @sendAppStateToMqtt, config.state.sendAppStateThrottleTime
 
-	publish: (options, cb) =>
-		throw new Error ".publish no longer supports callbacks" if cb
-
+	publish: (options) =>
 		message = options.message
 		message = JSON.stringify message unless _.isString message
 		topic   = [
@@ -30,6 +28,7 @@ class StateManager
 		]
 			.join "/"
 			.replace /\/{2,}/, "/"
+
 
 		promisify(@socket.publish.bind @socket) topic, message, options.opts
 
@@ -81,7 +80,7 @@ class StateManager
 
 	generateStateObject: ->
 		[images, containers, systemInfo] = await Promise.all [
-			promisify(@docker.listImages.bind @docker)()
+			@docker.listImages()
 			@docker.listContainers()
 			@docker.getDockerInfo()
 		]

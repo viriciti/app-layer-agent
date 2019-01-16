@@ -1,9 +1,8 @@
 MQTTPattern                             = require "mqtt-pattern"
 config                                  = require "config"
-mqtt                                    = require "mqtt"
+mqtt                                    = require "async-mqtt"
 { EventEmitter }                        = require "events"
 { omit, every, isArray, forEach, uniq } = require "lodash"
-{ promisify }                           = require "util"
 
 log = require("./lib/Logger") "Client"
 
@@ -72,9 +71,20 @@ class Client extends EventEmitter
 	expandTopic: (topic) =>
 		topic.replace /{id}/g, @clientId
 
+	createTopic: (topic) ->
+		rootTopic = "devices/#{@clientId}"
+		topic     = topic.replace rootTopic, ""
+
+		rootTopic
+			.concat topic
+			.replace /\/{2,}/, ""
+
 	fork: ->
 		throw new Error "You must connect to the broker before you can fork the MQTT client" unless @mqtt
 		@mqtt
+
+	publish: (topic, message, options = {}) ->
+		@mqtt.publish @createTopic(topic), message, options
 
 	subscribe: (topics) ->
 		@connect() unless @mqtt
@@ -83,6 +93,6 @@ class Client extends EventEmitter
 		topics            = topics.map @expandTopic
 		@subscribedTopics = uniq @subscribedTopics.concat topics
 
-		promisify(@mqtt.subscribe.bind @mqtt) topics
+		@mqtt.subscribe topics
 
 module.exports = Client

@@ -42,24 +42,26 @@ describe ".AppUpdater", ->
 	afterEach ->
 		groups = {}
 
-	it "should error if default group does not exist", (done) ->
+	it "should error if default group does not exist", ->
 		delete groups["default"]
 
 		updater = new AppUpdater
 
-		updater.update groups, [], (error) ->
+		try
+			await updater.update groups, []
+		catch error
 			assert.ok error.message.match /no default group/i
-			done()
 
-	it "should error if default group is not the first group", (done) ->
+	it "should error if default group is not the first group", ->
 		updater      = new AppUpdater
 		groups       =
 			name:    groups.name
 			default: groups["default"]
 
-		updater.update groups, [], (error) ->
+		try
+			await updater.update groups, []
+		catch error
 			assert.ok error.message.match /default group must appear first/i
-			done()
 
 	it "should be able to convert binds to mounts", ->
 		updater = new AppUpdater
@@ -87,7 +89,7 @@ describe ".AppUpdater", ->
 
 		assert.deepEqual updater.bindsToMounts(binds), expected
 
-	it "should fail to create if host file does not exist", (done) ->
+	it "should fail to create if host file does not exist", ->
 		docker    = new Docker
 		updater   = new AppUpdater docker
 		appConfig = updater.normalizeAppConfiguration
@@ -104,8 +106,9 @@ describe ".AppUpdater", ->
 			],
 			applicationName: testContainerName
 
-		docker.createContainer containerProps: appConfig, (error) ->
+		try
+			await docker.createContainer containerProps: appConfig
+		catch error
 			assert.ok error
 			assert.ok error.message.match /bind source path does not exist/i
 			assert.equal error.statusCode, 400
-			done()

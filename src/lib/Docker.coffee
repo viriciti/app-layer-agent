@@ -97,90 +97,62 @@ class Docker extends EventEmitter
 				return reject error if error
 				resolve()
 
-	listImages: (cb) =>
-		debug "Listing images ..."
-		@dockerClient.listImages (error, images) =>
-			return cb error if error
+	listImages: =>
+		images = await @dockerClient.listImages()
+		images = images.filter (image) ->
+			(image.RepoTags isnt null) and (image.RepoTags[0] isnt "<none>:<none>")
 
-			images = images.filter (image) ->
-				(image.RepoTags isnt null) and (image.RepoTags[0] isnt "<none>:<none>")
+		await Promise.all images.map (image) =>
+			@getImageByName image.RepoTags[0]
 
-			debug "Found #{images.length} images"
+	removableImages: =>
+		[containers, images] = await Promise.all [@listContainers(), @listImages()]
 
-			async.map images, (image, next) =>
-				@getImageByName image.RepoTags[0], next
-			, cb
+		getRemovableImages containers, images
 
-	removableImages: (cb) =>
-		async.parallel {
-			runningContainers: @listContainers
-			allImages:         @listImages
-		}, (error, { runningContainers, allImages } = {}) ->
-			return cb error if error
+	removeOldImages: =>
+		toRemove = await @removeImages()
 
-			cb null, getRemovableImages runningContainers, allImages
+		await Promise.all toRemove.map (name) =>
+			@removeImage name: name
 
-	removeOldImages: (cb) =>
-		async.waterfall [
-			@removableImages
-			(toRemove, cb) =>
-				async.eachSeries toRemove, (image, cb) =>
-					@removeImage
-						name: image
-					, cb
-				, cb
-		], cb
+	removeUntaggedImages: ->
+		images         = await @dockerClient.listImages()
+		untaggedImages = filterUntaggedImages images
 
-	removeUntaggedImages: (cb) ->
-		log.info "Removing untagged images ..."
+		log.info "Found #{untaggedImages.length} untagged images"
 
-		async.waterfall [
-			(cb) =>
-				@dockerClient.listImages cb
-			(allImages, cb) =>
-				untaggedImages = filterUntaggedImages allImages
+		await Promise.all untaggedImages.map (image) =>
+			@removeImage
+				id:     image.Id
+				gentle: true
 
-				log.info "Found #{untaggedImages.length} untagged images"
+	getImageByName: (name) ->
+		info = await @dockerClient.getImage(name).inspect()
 
-				async.eachSeries untaggedImages, (image, cb) =>
-					@removeImage { id: image.Id, gentle: true }, cb
-				, cb
-		], cb
+		id:          info.Id
+		name:        name
+		size:        info.Size
+		tags:        info.RepoTags
+		virtualSize: info.VirtualSize
 
-	getImageByName: (name, cb) ->
-		@dockerClient
-			.getImage name
-			.inspect (error, info) ->
-				return cb error if error
-
-				cb null, {
-					id:          info.Id,
-					name:        name,
-					tags:        info.RepoTags,
-					size:        info.Size,
-					virtualSize: info.VirtualSize
-				}
-
-	removeImage: ({ name, id }, cb) ->
+	removeImage: ({ name, id }) ->
 		entity   = id
 		entity or= name
 
 		log.info "Removing image #{@getShortenedImageId entity}"
 
-		@dockerClient
-			.getImage entity
-			.remove (error) =>
-				if error
-					if error.statusCode is 409
-						message = "Conflict: image #{@getShortenedImageId entity} is used by a container"
-						log.warn message
-						return cb null, message
-					else
-						log.error error.message
-						return cb error
-
-				log.info "Removed image #{entity} successfully"
-				cb()
+		try
+			await @dockerClient.getImage(entity).remove()
+			log.info "Removed image #{entity} successfully"
+		catch error
+			if error.statusCode is 409
+				message = "Conflict: image #{@getShortenedImageId entity} is used by a container"
+				log.warn message
+				message
+			else
+				log.error error.message
+				throw error
 
 	listContainers: =>
 		containers         = await @dockerClient.listContainers all: true
@@ -217,20 +189,20 @@ class Docker extends EventEmitter
 			hostPath: mount.Source, containerPath: mount.Destination, mode: mount.Mode
 		labels: containerInfo.Config.Labels
 
-	createContainer: ({ containerProps }, cb) ->
+	createContainer: ({ containerProps }) ->
 		log.info "Creating container #{containerProps.name} ..."
 
-		@dockerClient.createContainer containerProps, (error, created) ->
-			if error
-				if error.statusCode is 409
-					log.error "A container with the name #{containerProps.name} already exists"
-				else unless error.statusCode in config.docker.retry.errorCodes
-					log.error error.message
+		try
+			await @dockerClient.createContainer containerProps
+		catch error
+			if error.statusCode is 409
+				log.error "A container with the name #{containerProps.name} already exists"
+			else unless error.statusCode in config.docker.retry.errorCodes
+				log.error error.message
 
-				return cb error
+			return error
 
 			log.info "Created container #{containerProps.name}"
-			cb null, created
 
 	startContainer: ({ id }, cb) ->
 		log.info "Starting container #{id} ..."
