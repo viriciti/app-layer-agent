@@ -39,11 +39,6 @@ class Docker extends EventEmitter
 				stream.removeListener "error", onError
 				stream.push null
 
-	stop: ->
-		@dockerEventStream.removeListener "error", @handleStreamError
-		@dockerEventStream.removeListener "data",  @handleStreamData
-		@dockerEventStream.push null
-
 	getDockerInfo: =>
 		info = await @dockerClient.version()
 
