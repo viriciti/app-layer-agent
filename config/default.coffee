@@ -24,7 +24,7 @@ module.exports =
 		maxStoredTasks: 15
 
 	docker:
-		socketPath: "/var/run/docker.sock"
+		socketPath: if process.env.USE_BALENA then "/var/run/balena.sock" else "/var/run/docker.sock"
 		container:
 			allowRemoval: true
 			whitelist:    ["app-layer-agent"]

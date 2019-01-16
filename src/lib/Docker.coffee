@@ -1,10 +1,9 @@
-{ EventEmitter }                             = require "events"
-async                                        = require "async"
-debug                                        = (require "debug") "app: Docker"
 Dockerode                                    = require "dockerode"
-{ every, isEmpty, compact, random, pick }    = require "lodash"
-{ filterUntaggedImages, getRemovableImages } = require "@viriciti/app-layer-logic"
+async                                        = require "async"
 config                                       = require "config"
+{ EventEmitter }                             = require "events"
+{ every, isEmpty, compact, random }          = require "lodash"
+{ filterUntaggedImages, getRemovableImages } = require "@viriciti/app-layer-logic"
 
 log              = (require "./Logger") "Docker"
 DockerLogsParser = require "./DockerLogsParser"
@@ -16,31 +15,29 @@ class Docker extends EventEmitter
 		log.warn "Container removal is disabled" unless config.docker.container.allowRemoval
 
 		@dockerClient = new Dockerode socketPath: config.docker.socketPath
-		@logsParser   = new DockerLogsParser @
 
-		@dockerClient.getEvents (error, stream) =>
-			@dockerEventStream = stream
-			@emit "error", error if error
+		@listenForEvents()
 
-			@dockerEventStream
-				.on "error", @handleStreamError
-				.on "data",  @handleStreamData
-				.once "end", ->
-					log.warn "Closed connection to Docker daemon"
+	listenForEvents: ->
+		onData = (event) =>
+			try
+				@emit "logs", parser.parseLogs JSON.parse event
+			catch error
+				log.error "Error parsing event: #{error.message}"
+				@emit "error", error
 
-			@emit "status", "initiated"
+		onError = (error) =>
+			@emit "error", error
 
-	handleStreamError: (error) =>
-		@emit "error", error
-
-	handleStreamData: (event) =>
-		try
-			event = JSON.parse event
-		catch error
-			log.error "Error parsing event data:\n#{event.toString()}"
-			return @emit "error", error
-
-		@emit "logs", @logsParser.parseLogs event
+		parser = new DockerLogsParser @
+		stream = await @dockerClient.getEvents()
+		stream
+			.on "data",  onData
+			.on "error", onError
+			.once "end", ->
+				stream.removeListener "data",  onData
+				stream.removeListener "error", onError
+				stream.push null
 
 	stop: ->
 		@dockerEventStream.removeListener "error", @handleStreamError
@@ -81,7 +78,10 @@ class Docker extends EventEmitter
 
 					true
 			, (next) =>
-				@dockerClient.pull name, { authconfig: credentials }, (error, stream) =>
+				options            = {}
+				options.authconfig = credentials if credentials
+
+				@dockerClient.pull name, options, (error, stream) =>
 					if error
 						if error.message.match /unauthorized/
 							log.error "No permission to pull #{name}"
@@ -167,33 +167,33 @@ class Docker extends EventEmitter
 		@serializeContainer await @dockerClient.getContainer(name).inspect size: 1
 
 	serializeContainer: (containerInfo) ->
-		Id            : containerInfo.Id
-		name          : containerInfo.Name.replace "/", ""
-		commands      : containerInfo.Config.Cmd
-		restartPolicy :
-			type: containerInfo.HostConfig.RestartPolicy.Name
+		Id:       containerInfo.Id
+		name:     containerInfo.Name.replace "/", ""
+		commands: containerInfo.Config.Cmd
+		restartPolicy:
+			type:            containerInfo.HostConfig.RestartPolicy.Name
 			maxRetriesCount: containerInfo.HostConfig.RestartPolicy.MaximumRetryCount
-		privileged    : containerInfo.HostConfig.Privileged
-		readOnly      : containerInfo.HostConfig.ReadonlyRootfs
-		image         : containerInfo.Config.Image
-		networkMode   : containerInfo.HostConfig.NetworkMode
-		state         :
+		privileged:  containerInfo.HostConfig.Privileged
+		readOnly:    containerInfo.HostConfig.ReadonlyRootfs
+		image:       containerInfo.Config.Image
+		networkMode: containerInfo.HostConfig.NetworkMode
+		state:
 			status:   containerInfo.State.Status
 			exitCode: containerInfo.State.ExitCode
 			running:  containerInfo.State.Running
-		ports         : containerInfo.HostConfig.PortBindings
-		environment   : containerInfo.Config.Env
+		ports:          containerInfo.HostConfig.PortBindings
+		environment:    containerInfo.Config.Env
 		sizeFilesystem: containerInfo.SizeRw          # in bytes
-		sizeRootFilesystem : containerInfo.SizeRootFs # in bytes
-		mounts        : containerInfo.Mounts.filter (mount) ->
+		sizeRootFilesystem: containerInfo.SizeRootFs # in bytes
+		mounts: containerInfo.Mounts.filter (mount) ->
 			hostPath: mount.Source, containerPath: mount.Destination, mode: mount.Mode
 		labels: containerInfo.Config.Labels
 
-	createContainer: ({ containerProps }) ->
+	createContainer: (containerProps) ->
 		log.info "Creating container #{containerProps.name} ..."
 
 		try
-			await @dockerClient.createContainer containerProps
+			@dockerClient.createContainer containerProps
 		catch error
 			if error.statusCode is 409
 				log.error "A container with the name #{containerProps.name} already exists"
@@ -204,29 +204,19 @@ class Docker extends EventEmitter
 
 			log.info "Created container #{containerProps.name}"
 
-	startContainer: ({ id }, cb) ->
+	startContainer: ({ id }) ->
 		log.info "Starting container #{id} ..."
 
 		@dockerClient
 			.getContainer id
-			.start (error) ->
-				if error
-					log.error "Starting container '#{id}' failed: #{error.message}"
-					return cb error
+			.start()
 
-				cb null, "Container #{id} started correctly"
-
-	restartContainer: ({ id }, cb) ->
+	restartContainer: ({ id }) ->
 		log.info "Restarting container #{id} ..."
 
 		@dockerClient
 			.getContainer id
-			.restart (error) ->
-				if error
-					log.error "Restarting container '#{id}' failed: #{error.message}"
-					return cb error
-
-				cb null, "Container #{id} restarted correctly"
+			.restart()
 
 	removeContainer: ({ id, force = false }) ->
 		log.info "Removing container '#{id}'"
@@ -235,13 +225,13 @@ class Docker extends EventEmitter
 		toRemove   = containers.filter (c) -> c.name.includes id
 
 		await Promise.all toRemove.map (container) =>
-			@dockerclient
+			@dockerClient
 				.getContainer container.Id
 				.remove force: force
 
 		log.info "Removed #{toRemove.length} containers"
 
-	getContainerLogs: ({ id }, cb) ->
+	getContainerLogs: ({ id }) ->
 		container = @dockerClient.getContainer id
 		options   =
 			stdout: true
@@ -249,22 +239,16 @@ class Docker extends EventEmitter
 			tail:   100
 			follow: false
 
-		container.logs options, (error, logs) ->
-			if error
-				log.error "Error retrieving container logs for '#{id}'"
-				return cb error
+		logs = await container.logs options
+		unless logs
+			error = new Error "No logs available for #{id}"
+			log.warn error.message
+			return Promise.reject new Error error
 
-			unless logs
-				error = new Error "No logs available for #{id}"
-				log.warn error.message
-				return cb new Error error
-
-			logs = logs
-				.split  "\n"
-				.filter (line) -> not isEmpty line
-				.map    (line) -> line.substr 8, line.length - 1
-
-			cb null, logs
+		logs
+			.split  "\n"
+			.filter (line) -> not isEmpty line
+			.map    (line) -> line.substr 8, line.length - 1
 
 	getShortenedImageId: (id) ->
 		return id unless id.startsWith "sha256:"

@@ -107,7 +107,7 @@ describe ".AppUpdater", ->
 			applicationName: testContainerName
 
 		try
-			await docker.createContainer containerProps: appConfig
+			await docker.createContainer appConfig
 		catch error
 			assert.ok error
 			assert.ok error.message.match /bind source path does not exist/i

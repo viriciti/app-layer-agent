@@ -114,7 +114,7 @@ class AppUpdater
 		await @docker.removeContainer id: containerInfo.name, force: true
 
 		return if @isPastLastInstallStep "Create", appConfig.lastInstallStep
-		await @docker.createContainer containerProps: containerInfo
+		await @docker.createContainer containerInfo
 
 		return if @isPastLastInstallStep "Start", appConfig.lastInstallStep
 		await @docker.startContainer id: containerInfo.name
