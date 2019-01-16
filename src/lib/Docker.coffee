@@ -111,7 +111,7 @@ class Docker extends EventEmitter
 		getRemovableImages containers, images
 
 	removeOldImages: =>
-		toRemove = await @removeImages()
+		toRemove = await @removableImages()
 
 		await Promise.all toRemove.map (name) =>
 			@removeImage name: name
