@@ -246,11 +246,8 @@ class Docker extends EventEmitter
 			tail:   100
 			follow: false
 
-		logs = await container.logs options
-		unless logs
-			error = new Error "No logs available for #{id}"
-			log.warn error.message
-			return Promise.reject new Error error
+		logs   = await container.logs options
+		logs or= []
 
 		logs
 			.split  "\n"
