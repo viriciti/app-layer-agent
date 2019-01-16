@@ -1,24 +1,30 @@
 debug = (require "debug") "app:helpers:registerFunction"
+config = require "config"
 
-registeredFunctions = []
+module.exports = ({ taskManager, name, fn, sync = false }) ->
+	name = [
+		config.mqtt.actions.baseTopic
+		config.mqtt.clientId
+		name
+	].join "/"
 
-module.exports = (rpc, name, fn) ->
 	# remove duplicate forward slashes
 	name = name.replace /\/{2,}/g, "/"
 
 	debug "Registering function '#{name}' ..."
 
-	rpc.unregister name if registeredFunctions.includes name
-	registeredFunctions.push name
-
-	rpc.register name, (...params) ->
+	taskManager.register name, (...params) ->
 		debug "Executing function '#{name}' ..."
 
-		try
-			status: "OK"
-			data:   await fn.apply fn, params
-		catch error
-			status: "ERROR"
-			data:   error.message
-		finally
-			debug "Function '#{name}' executed"
+		# sync actions are currently unqueueable because
+		# the server expects a response, which is not possible
+		# due to the background processing of actions
+		if sync
+			fn ...params
+		else
+			taskManager.addTask
+				name:   name
+				fn:     fn
+				params: params
+
+			status: "ACK"

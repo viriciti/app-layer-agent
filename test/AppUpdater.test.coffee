@@ -1,4 +1,5 @@
 assert     = require "assert"
+{ random } = require "lodash"
 AppUpdater = require "../src/manager/AppUpdater"
 Docker     = require "../src/lib/Docker"
 
@@ -36,31 +37,32 @@ describe ".AppUpdater", ->
 						group: "somegroup"
 						manual: false
 
-	after (done) ->
-		docker.removeContainer testContainerName, ->
-			done()
+	after ->
+		docker.removeContainer testContainerName
 
 	afterEach ->
 		groups = {}
 
-	it "should error if default group does not exist", (done) ->
+	it "should error if default group does not exist", ->
 		delete groups["default"]
 
 		updater = new AppUpdater
 
-		updater.update groups, [], (error) ->
+		try
+			await updater.update groups, []
+		catch error
 			assert.ok error.message.match /no default group/i
-			done()
 
-	it "should error if default group is not the first group", (done) ->
+	it "should error if default group is not the first group", ->
 		updater      = new AppUpdater
 		groups       =
 			name:    groups.name
 			default: groups["default"]
 
-		updater.update groups, [], (error) ->
-			assert.ok error.message.match /Default group must appear first/i
-			done()
+		try
+			await updater.update groups, []
+		catch error
+			assert.ok error.message.match /default group must appear first/i
 
 	it "should be able to convert binds to mounts", ->
 		updater = new AppUpdater
@@ -88,7 +90,7 @@ describe ".AppUpdater", ->
 
 		assert.deepEqual updater.bindsToMounts(binds), expected
 
-	it "should fail to create if host file does not exist", (done) ->
+	it "should fail to create if host file does not exist", ->
 		docker    = new Docker
 		updater   = new AppUpdater docker
 		appConfig = updater.normalizeAppConfiguration
@@ -101,12 +103,13 @@ describe ".AppUpdater", ->
 			privileged:    true,
 			version:       "^1.0.0",
 			mounts: [
-				"/this/will/never/exist/ok:/version/mount"
+				"/this/will/never/exist/ok/#{random 0, 1000000}:/version/mount"
 			],
 			applicationName: testContainerName
 
-		docker.createContainer containerProps: appConfig, (error) ->
+		try
+			await docker.createContainer appConfig
+		catch error
 			assert.ok error
 			assert.ok error.message.match /bind source path does not exist/i
 			assert.equal error.statusCode, 400
-			done()

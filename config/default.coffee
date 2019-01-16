@@ -20,8 +20,11 @@ module.exports =
 		sendStateThrottleTime:    10000
 		sendAppStateThrottleTime: 3000
 
+	queue:
+		maxStoredTasks: 15
+
 	docker:
-		socketPath: "/var/run/docker.sock"
+		socketPath: if process.env.USE_BALENA then "/var/run/balena.sock" else "/var/run/docker.sock"
 		container:
 			allowRemoval: true
 			whitelist:    ["app-layer-agent"]

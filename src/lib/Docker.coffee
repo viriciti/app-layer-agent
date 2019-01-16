@@ -1,10 +1,9 @@
-{ EventEmitter }                             = require "events"
-async                                        = require "async"
-debug                                        = (require "debug") "app:Docker"
 Dockerode                                    = require "dockerode"
+async                                        = require "async"
+config                                       = require "config"
+{ EventEmitter }                             = require "events"
 { every, isEmpty, compact, random }          = require "lodash"
 { filterUntaggedImages, getRemovableImages } = require "@viriciti/app-layer-logic"
-config                                       = require "config"
 
 log              = (require "./Logger") "Docker"
 DockerLogsParser = require "./DockerLogsParser"
@@ -16,284 +15,235 @@ class Docker extends EventEmitter
 		log.warn "Container removal is disabled" unless config.docker.container.allowRemoval
 
 		@dockerClient = new Dockerode socketPath: config.docker.socketPath
-		@logsParser   = new DockerLogsParser @
 
-		@dockerClient.getEvents (error, stream) =>
-			@dockerEventStream = stream
-			@emit "error", error if error
+		@listenForEvents()
 
-			@dockerEventStream
-				.on "error", @handleStreamError
-				.on "data",  @handleStreamData
-				.once "end", ->
-					log.warn "Closed connection to Docker daemon"
+	listenForEvents: ->
+		onData = (event) =>
+			try
+				@emit "logs", parser.parseLogs JSON.parse event
+			catch error
+				log.error "Error parsing event: #{error.message}"
+				@emit "error", error
 
-			@emit "status", "initiated"
+		onError = (error) =>
+			@emit "error", error
 
-	handleStreamError: (error) =>
-		@emit "error", error
-
-	handleStreamData: (event) =>
-		try
-			event = JSON.parse event
-		catch error
-			log.error "Error parsing event data:\n#{event.toString()}"
-			return @emit "error", error
-
-		@emit "logs", @logsParser.parseLogs event
+		parser = new DockerLogsParser @
+		stream = await @dockerClient.getEvents()
+		stream
+			.on "data",  onData
+			.on "error", onError
+			.once "end", ->
+				stream.removeListener "data",  onData
+				stream.removeListener "error", onError
+				stream.push null
 
 	stop: ->
 		@dockerEventStream.removeListener "error", @handleStreamError
 		@dockerEventStream.removeListener "data",  @handleStreamData
 		@dockerEventStream.push null
 
-	getDockerInfo: (cb) =>
-		@dockerClient.version (error, info) ->
-			return cb error if error
+	getDockerInfo: =>
+		info = await @dockerClient.version()
 
-			cb null,
-				apiVerion: info.ApiVersion
-				version:   info.Version
-				kernel:    info.KernelVersion
+		apiVersion: info.ApiVersion
+		version:    info.Version
+		kernel:     info.KernelVersion
 
-	pullImage: ({ name }, cb) =>
+	pullImage: ({ name }) =>
 		log.info "Pulling image '#{name}'..."
 
-		credentials  = null
-		credentials  = config.docker.registryAuth.credentials if every config.docker.registryAuth.credentials
-		retryIn      = 1000 * 60
-		pullInterval = setInterval =>
-			@emit "logs",
-				message: "Pulling #{name}"
-				image: name
-				type:  "action"
-				time:  Date.now()
-		, 3000
+		new Promise (resolve, reject) =>
+			credentials  = null
+			credentials  = config.docker.registryAuth.credentials if every config.docker.registryAuth.credentials
+			retryIn      = 1000 * 60
+			pullInterval = setInterval =>
+				@emit "logs",
+					message: "Pulling #{name}"
+					image: name
+					type:  "action"
+					time:  Date.now()
+			, 3000
 
-		async.retry
-			times: config.docker.retry.maxAttempts
-			interval: ->
-				retryIn
-			errorFilter: (error) ->
-				return false unless error.statusCode in config.docker.retry.errorCodes
+			async.retry
+				times: config.docker.retry.maxAttempts
+				interval: ->
+					retryIn
+				errorFilter: (error) ->
+					return false unless error.statusCode in config.docker.retry.errorCodes
 
-				retryIn = random config.docker.retry.minWaitingTime, config.docker.retry.maxWaitingTime
-				log.warn "Pulling #{name} failed, retrying after #{retryIn}ms"
+					retryIn = random config.docker.retry.minWaitingTime, config.docker.retry.maxWaitingTime
+					log.warn "Pulling #{name} failed, retrying after #{retryIn}ms"
 
-				true
-		, (next) =>
-			@dockerClient.pull name, { authconfig: credentials }, (error, stream) =>
-				if error
-					if error.message.match /unauthorized/
-						log.error "No permission to pull #{name}"
-					else unless error.statusCode in config.docker.retry.errorCodes
-						log.error error.message
+					true
+			, (next) =>
+				options            = {}
+				options.authconfig = credentials if credentials
 
-					return next error
+				@dockerClient.pull name, options, (error, stream) =>
+					if error
+						if error.message.match /unauthorized/
+							log.error "No permission to pull #{name}"
+						else unless error.statusCode in config.docker.retry.errorCodes
+							log.error error.message
 
-				@dockerClient.modem.followProgress stream, next
-		, (error) ->
-			clearInterval pullInterval
+						return next error
 
-			cb error
+					@dockerClient.modem.followProgress stream, next
+			, (error) ->
+				clearInterval pullInterval
 
-	listImages: (cb) =>
-		debug "Listing images ..."
-		@dockerClient.listImages (error, images) =>
-			return cb error if error
+				return reject error if error
+				resolve()
 
-			images = images.filter (image) ->
-				(image.RepoTags isnt null) and (image.RepoTags[0] isnt "<none>:<none>")
+	listImages: =>
+		images = await @dockerClient.listImages()
+		images = images.filter (image) ->
+			(image.RepoTags isnt null) and (image.RepoTags[0] isnt "<none>:<none>")
 
-			debug "Found #{images.length} images"
+		await Promise.all images.map (image) =>
+			@getImageByName image.RepoTags[0]
 
-			async.map images, (image, next) =>
-				@getImageByName image.RepoTags[0], next
-			, cb
+	removableImages: =>
+		[containers, images] = await Promise.all [@listContainers(), @listImages()]
 
-	removableImages: (cb) =>
-		async.parallel {
-			runningContainers: @listContainers
-			allImages:         @listImages
-		}, (error, { runningContainers, allImages } = {}) ->
-			return cb error if error
+		getRemovableImages containers, images
 
-			cb null, getRemovableImages runningContainers, allImages
+	removeOldImages: =>
+		toRemove = await @removableImages()
 
-	removeOldImages: (cb) =>
-		async.waterfall [
-			@removableImages
-			(toRemove, cb) =>
-				async.eachSeries toRemove, (image, cb) =>
-					@removeImage
-						name: image
-					, cb
-				, cb
-		], cb
+		await Promise.all toRemove.map (name) =>
+			@removeImage name: name
 
-	removeUntaggedImages: (cb) ->
-		log.info "Removing untagged images ..."
+	removeUntaggedImages: ->
+		images         = await @dockerClient.listImages()
+		untaggedImages = filterUntaggedImages images
 
-		async.waterfall [
-			(cb) =>
-				@dockerClient.listImages cb
-			(allImages, cb) =>
-				untaggedImages = filterUntaggedImages allImages
+		log.info "Found #{untaggedImages.length} untagged images"
 
-				log.info "Found #{untaggedImages.length} untagged images"
+		await Promise.all untaggedImages.map (image) =>
+			@removeImage
+				id:     image.Id
+				gentle: true
 
-				async.eachSeries untaggedImages, (image, cb) =>
-					@removeImage { id: image.Id, gentle: true }, cb
-				, cb
-		], cb
+	getImageByName: (name) ->
+		info = await @dockerClient.getImage(name).inspect()
 
-	getImageByName: (name, cb) ->
-		@dockerClient
-			.getImage name
-			.inspect (error, info) ->
-				return cb error if error
+		id:          info.Id
+		name:        name
+		size:        info.Size
+		tags:        info.RepoTags
+		virtualSize: info.VirtualSize
 
-				cb null, {
-					id:          info.Id,
-					name:        name,
-					tags:        info.RepoTags,
-					size:        info.Size,
-					virtualSize: info.VirtualSize
-				}
-
-	removeImage: ({ name, id }, cb) ->
+	removeImage: ({ name, id }) ->
 		entity   = id
 		entity or= name
 
 		log.info "Removing image #{@getShortenedImageId entity}"
 
-		@dockerClient
-			.getImage entity
-			.remove (error) =>
-				if error
-					if error.statusCode is 409
-						message = "Conflict: image #{@getShortenedImageId entity} is used by a container"
-						log.warn message
-						return cb null, message
-					else
-						log.error error.message
-						return cb error
+		try
+			await @dockerClient.getImage(entity).remove()
+			log.info "Removed image #{entity} successfully"
+		catch error
+			if error.statusCode is 409
+				message = "Conflict: image #{@getShortenedImageId entity} is used by a container"
+				log.warn message
+				message
+			else
+				log.error error.message
+				throw error
 
-				log.info "Removed image #{entity} successfully"
-				cb()
+	listContainers: =>
+		containers         = await @dockerClient.listContainers all: true
+		containersDetailed = await Promise.all containers.map (container) =>
+			# container.Names is an array of names in the format "/name"
+			# only the first name after the slash is needed
+			@getContainerByName container.Names[0].replace "/", ""
 
-	listContainers: (cb) =>
-		@dockerClient.listContainers all: true, (error, containers) =>
-			return cb error if error
+		compact containersDetailed
 
-			async.map containers, (container, next) =>
-				# container.Names is an array of names in the format "/name".
-				# Only the first name after the slash is needed.
-				@getContainerByName container.Names[0].replace("/", ""), (err, containerByName) ->
-					return next()     unless containerByName
-					return next error if error
+	getContainerByName: (name) =>
+		try
+			container = await @dockerClient
+				.getContainer name
+				.inspect size: 1
 
-					next null, containerByName
-			, (error, formattedContainers) ->
-				return cb error if error
-				cb null, compact formattedContainers
+			return unless container
 
-	getContainerByName: (name, cb) =>
-		@dockerClient
-			.getContainer name
-			.inspect size: 1, (error, info) =>
-				return cb error if error
-				cb null, @serializeContainer info
+			@serializeContainer container
+		catch error
+			return undefined if error.statusCode is 404
+			throw error
 
 	serializeContainer: (containerInfo) ->
-		Id            : containerInfo.Id
-		name          : containerInfo.Name.replace "/", ""
-		commands      : containerInfo.Config.Cmd
-		restartPolicy :
-			type: containerInfo.HostConfig.RestartPolicy.Name
+		Id:       containerInfo.Id
+		name:     containerInfo.Name.replace "/", ""
+		commands: containerInfo.Config.Cmd
+		restartPolicy:
+			type:            containerInfo.HostConfig.RestartPolicy.Name
 			maxRetriesCount: containerInfo.HostConfig.RestartPolicy.MaximumRetryCount
-		privileged    : containerInfo.HostConfig.Privileged
-		readOnly      : containerInfo.HostConfig.ReadonlyRootfs
-		image         : containerInfo.Config.Image
-		networkMode   : containerInfo.HostConfig.NetworkMode
-		state         :
+		privileged:  containerInfo.HostConfig.Privileged
+		readOnly:    containerInfo.HostConfig.ReadonlyRootfs
+		image:       containerInfo.Config.Image
+		networkMode: containerInfo.HostConfig.NetworkMode
+		state:
 			status:   containerInfo.State.Status
 			exitCode: containerInfo.State.ExitCode
 			running:  containerInfo.State.Running
-		ports         : containerInfo.HostConfig.PortBindings
-		environment   : containerInfo.Config.Env
+		ports:          containerInfo.HostConfig.PortBindings
+		environment:    containerInfo.Config.Env
 		sizeFilesystem: containerInfo.SizeRw          # in bytes
-		sizeRootFilesystem : containerInfo.SizeRootFs # in bytes
-		mounts        : containerInfo.Mounts.filter (mount) ->
-			hostPath: mount.Source, containerPath: mount.Destination, mode: mount.Mode
+		sizeRootFilesystem: containerInfo.SizeRootFs # in bytes
+		mounts: containerInfo.Mounts.filter (mount) ->
+			hostPath:      mount.Source
+			containerPath: mount.Destination
+			mode:          mount.Mode
 		labels: containerInfo.Config.Labels
 
-	createContainer: ({ containerProps }, cb) ->
+	createContainer: (containerProps) ->
 		log.info "Creating container #{containerProps.name} ..."
 
-		@dockerClient.createContainer containerProps, (error, created) ->
-			if error
-				if error.statusCode is 409
-					log.error "A container with the name #{containerProps.name} already exists"
-				else unless error.statusCode in config.docker.retry.errorCodes
-					log.error error.message
-
-				return cb error
+		try
+			await @dockerClient.createContainer containerProps
 
 			log.info "Created container #{containerProps.name}"
-			cb null, created
+		catch error
+			if error.statusCode is 409
+				log.error "A container with the name #{containerProps.name} already exists"
+			else unless error.statusCode in config.docker.retry.errorCodes
+				log.error error.message
 
-	startContainer: ({ id }, cb) ->
+			throw error
+
+	startContainer: (id) ->
 		log.info "Starting container #{id} ..."
 
 		@dockerClient
 			.getContainer id
-			.start (error) ->
-				if error
-					log.error "Starting container '#{id}' failed: #{error.message}"
-					return cb error
+			.start()
 
-				cb null, "Container #{id} started correctly"
-
-	restartContainer: ({ id }, cb) ->
+	restartContainer: (id) ->
 		log.info "Restarting container #{id} ..."
 
 		@dockerClient
 			.getContainer id
-			.restart (error) ->
-				if error
-					log.error "Restarting container '#{id}' failed: #{error.message}"
-					return cb error
+			.restart()
 
-				cb null, "Container #{id} restarted correctly"
-
-	removeContainer: ({ id, force = false }, cb) ->
-		return cb() unless config.docker.container.allowRemoval
-
+	removeContainer: ({ id, force = false }) ->
 		log.info "Removing container '#{id}'"
 
-		@listContainers (error, containers) =>
-			if error
-				log.error "Error listing containers: #{error.message}"
-				return cb error
+		containers = await @listContainers()
+		toRemove   = containers.filter (c) -> c.name.includes id
 
-			toRemove = containers.filter (c) -> c.name.includes id
+		await Promise.all toRemove.map (container) =>
+			@dockerClient
+				.getContainer container.Id
+				.remove force: force
 
-			async.eachSeries toRemove, (c, cb) =>
-				@dockerClient.getContainer(c.Id).remove { force }, (error) ->
-					if error
-						log.error "Error removing '#{id}': #{error.message}"
+		log.info "Removed #{toRemove.length} containers"
 
-					cb error
-			, (error) ->
-				if error
-					log.error "Error in removing one of the containers"
-				else
-					log.info "Removed container '#{id}'"
-
-				cb error
-
-	getContainerLogs: ({ id }, cb) ->
+	getContainerLogs: (id) ->
 		container = @dockerClient.getContainer id
 		options   =
 			stdout: true
@@ -301,22 +251,16 @@ class Docker extends EventEmitter
 			tail:   100
 			follow: false
 
-		container.logs options, (error, logs) ->
-			if error
-				log.error "Error retrieving container logs for '#{id}'"
-				return cb error
+		logs = await container.logs options
+		unless logs
+			error = new Error "No logs available for #{id}"
+			log.warn error.message
+			return Promise.reject new Error error
 
-			unless logs
-				error = new Error "No logs available for #{id}"
-				log.warn error.message
-				return cb new Error error
-
-			logs = logs
-				.split  "\n"
-				.filter (line) -> not isEmpty line
-				.map    (line) -> line.substr 8, line.length - 1
-
-			cb null, logs
+		logs
+			.split  "\n"
+			.filter (line) -> not isEmpty line
+			.map    (line) -> line.substr 8, line.length - 1
 
 	getShortenedImageId: (id) ->
 		return id unless id.startsWith "sha256:"
