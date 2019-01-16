@@ -1,9 +1,12 @@
-_      = require "lodash"
-assert = require "assert"
-config = require "config"
+{ random, take, isArray }                    = require "lodash"
+assert                                       = require "assert"
+config                                       = require "config"
+spy                                          = require "spy"
 { filterUntaggedImages, getRemovableImages } = require "@viriciti/app-layer-logic"
 
-Docker = require "../src/lib/Docker"
+Docker                                           = require "../src/lib/Docker"
+{ createTestContainer, removeAllTestContainers } = require "./utils/container"
+delay                                            = require "./utils/delay"
 
 mockDockerPull = (docker, returnStatusCode = 200) ->
 	throw new Error "Invalid Docker client" unless docker instanceof Docker
@@ -11,21 +14,20 @@ mockDockerPull = (docker, returnStatusCode = 200) ->
 	docker
 		.dockerClient
 		.pull = (name, options, cb) ->
-			if _.isFunction options
-				cb      = options
-				options = {}
-
 			setTimeout ->
 				error            = new Error
 				error.statusCode = returnStatusCode
 				error.json       = {}
 
 				cb error
-			, _.random 100, 500
+			, random 100, 500
 
 	docker
 
 describe ".Docker", ->
+	after ->
+		removeAllTestContainers()
+
 	it "should list removable images", ->
 		{ allImages, runningContainers } = require "../meta/running-images"
 		toRemove                         = getRemovableImages runningContainers, allImages
@@ -73,29 +75,18 @@ describe ".Docker", ->
 
 		untagged = filterUntaggedImages stubImages
 
-		assert.deepEqual untagged, _.take stubImages, 2
+		assert.deepEqual untagged, take stubImages, 2
 
-	it "should remove untagged images", (done) ->
-		docker = new Docker
-		docker.removeUntaggedImages (error, data) ->
-			throw error if error
-			docker
-				.dockerEventStream
-				.once "end", ->
-					done()
-
-			docker.stop()
-
-	it "should not retry if status code is 500", (done) ->
+	it "should not retry if status code is 500", ->
 		docker = new Docker
 		docker = mockDockerPull docker, 500
 
-		docker.pullImage "hello-world", (error, stream) ->
-			assert.ifError stream
+		try
+			await docker.pullImage "hello-world"
+		catch error
 			assert.equal error.statusCode, 500
-			done()
 
-	it "should retry if status code is 502", (done) ->
+	it "should retry if status code is 502", ->
 		docker                             = new Docker
 		docker                             = mockDockerPull docker, 502
 		date                               = Date.now()
@@ -103,9 +94,103 @@ describe ".Docker", ->
 		{ maxAttempts }                    = config.docker.retry
 		expectedMinimumWaitingTime         = ((maxWaitingTime - minWaitingTime) + minWaitingTime) * maxAttempts
 
-		docker.pullImage "hello-world", (error, stream) ->
-			return done new Error "Callback was called too early" if (Date.now() - date) > expectedMinimumWaitingTime
+		try
+			await docker.pullImage "hello-world"
+		catch error
+			return new Error "Callback was called too early" if (Date.now() - date) > expectedMinimumWaitingTime
 
-			assert.ifError stream
 			assert.equal error.statusCode, 502
-			done()
+
+	it "should be able to return a shortened image id", ->
+		docker    = new Docker
+
+		hash      = "sha256:87f1a6e84e0012a52c1a176619256c3f0222591b78a266188f9fc983a383b64a"
+		shortened = docker.getShortenedImageId hash
+		assert.equal shortened, "87f1a6e84e00"
+
+		hash      = "87f1a6e84e0012a52c1a176619256c3f0222591b78a266188f9fc983a383b64a"
+		shortened = docker.getShortenedImageId hash
+		assert.equal hash, shortened
+
+	it "should be able to get info", ->
+		docker = new Docker
+		info   = await docker.getDockerInfo()
+
+		assert.ok info.apiVersion
+		assert.ok info.version
+		assert.ok info.kernel
+
+	it "should be able to list images", ->
+		docker = new Docker
+		images = await docker.listImages()
+
+		assert.ok isArray images
+
+	it "should be able to list containers", ->
+		docker     = new Docker
+		containers = await docker.listContainers()
+
+		assert.ok isArray containers
+
+	it "should inspect containers when listing", ->
+		new Promise (resolve) ->
+			docker                    = new Docker
+			docker.getContainerByName = spy ->
+				resolve() if @getContainerByName.called
+
+			docker.listContainers()
+
+	it "should be able to pull an image", ->
+		@timeout 10000
+
+		docker = new Docker
+
+		assert.doesNotReject ->
+			docker.pullImage name: "hello-world:latest"
+
+	it "should be able to create a container", ->
+		docker = new Docker
+
+		await docker.createContainer
+			name:  "test-container"
+			Image: "hello-world"
+
+		await delay 1000
+		await docker
+			.dockerClient
+			.getContainer "test-container"
+			.remove force: true
+
+	it "should fail if container has no logs", ->
+		docker   = new Docker
+		{ name } = await createTestContainer autoStart: false
+
+		assert.rejects ->
+			docker.getContainerLogs name
+
+	it "should be able to start a container", ->
+		docker   = new Docker
+		{ name } = await createTestContainer()
+
+		await docker.startContainer name
+
+	it "should be able to get container logs", ->
+		docker   = new Docker
+		{ name } = await createTestContainer autoStart: true
+
+		assert.ok isArray await docker.getContainerLogs name
+
+	it "should be able to restart a container", ->
+		docker   = new Docker
+		{ name } = await createTestContainer()
+
+		await docker.restartContainer name
+
+	it "should be able to remove a container", ->
+		docker   = new Docker
+		{ name } = await createTestContainer()
+
+		await delay 1000
+		await docker.removeContainer
+			id:    name
+			force: true

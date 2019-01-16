@@ -1,4 +1,5 @@
 .app-layer-agent
+.nyc_output
 node_modules
 build
 config/local.*

@@ -1,34 +1,36 @@
-MQTTPattern                       = require "mqtt-pattern"
-mqtt                              = require "mqtt"
-{ EventEmitter }                  = require "events"
-{ omit, every, isArray, forEach } = require "lodash"
-{ promisify }                     = require "util"
+MQTTPattern                             = require "mqtt-pattern"
+config                                  = require "config"
+mqtt                                    = require "async-mqtt"
+{ EventEmitter }                        = require "events"
+{ omit, every, isArray, forEach, uniq } = require "lodash"
 
 log = require("./lib/Logger") "Client"
 
 class Client extends EventEmitter
-	constructor: (@options) ->
+	constructor: ->
 		super()
 
+		@options  = config.mqtt
 		@clientId = @options.clientId
 		@options  = { ...@options, ...@options.extraOptions, will: @getWill() }
 		@options  = omit @options, "tls" unless every @options.tls
 		@options  = omit @options, "extraOptions"
 
-		@events           = []
 		@subscribedTopics = []
 
 	connect: ->
-		new Promise (resolve) =>
-			@mqtt = mqtt.connect @options
+		@mqtt = mqtt.connect @options
+		@mqtt.on "connect", @onConnect
 
-			@mqtt
-				.once "connect",     resolve
-				.on "packetreceive", @onPacket
-				.on "error",         @onError
-				.on "reconnect",     @onReconnect
-				.on "offline",       @onOffline
-				.on "close",         @onClose
+	onConnect: =>
+		@mqtt
+			.on "packetreceive", @onPacket
+			.on "error",         @onError
+			.on "reconnect",     @onReconnect
+			.on "offline",       @onOffline
+			.on "close",         @onClose
+
+		@emit "connect"
 
 	onPacket: (packet) =>
 		return unless packet
@@ -40,7 +42,7 @@ class Client extends EventEmitter
 			expanded = @expandTopic topic
 			return unless MQTTPattern.matches expanded, packet.topic
 
-			@emit topic, expanded, payload
+			@emit topic, packet.topic, payload
 
 	onError: (error) ->
 		log.error "Could not connect to the MQTT broker: #{error.message}"
@@ -51,13 +53,15 @@ class Client extends EventEmitter
 	onOffline: ->
 		log.warn "Disconnected"
 
-	onClose: (reason) =>
+	onClose: =>
 		@mqtt
 			.removeListener "packetreceive", @onPacket
 			.removeListener "error",         @onError
 			.removeListener "reconnect",     @onReconnect
 			.removeListener "offline",       @onOffline
 			.removeListener "close",         @onClose
+
+		@emit "close"
 
 	getWill: ->
 		topic:   "devices/#{@clientId}/status"
@@ -67,16 +71,28 @@ class Client extends EventEmitter
 	expandTopic: (topic) =>
 		topic.replace /{id}/g, @clientId
 
+	createTopic: (topic) ->
+		rootTopic = "devices/#{@clientId}"
+		topic     = topic.replace rootTopic, ""
+
+		rootTopic
+			.concat topic
+			.replace /\/{2,}/, ""
+
 	fork: ->
-		throw new Error "You must connect before you can fork the MQTT client" unless @mqtt
+		throw new Error "You must connect to the broker before you can fork the MQTT client" unless @mqtt
 		@mqtt
 
+	publish: (topic, message, options = {}) ->
+		@mqtt.publish @createTopic(topic), message, options
+
 	subscribe: (topics) ->
-		await @connect() unless @mqtt
+		@connect() unless @mqtt
 
-		topics = [topics] unless isArray topics
-		topics = topics.map @expandTopic
+		topics            = [topics] unless isArray topics
+		topics            = topics.map @expandTopic
+		@subscribedTopics = uniq @subscribedTopics.concat topics
 
-		promisify(@mqtt.subscribe.bind @mqtt) topics
+		@mqtt.subscribe topics
 
 module.exports = Client

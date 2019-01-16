@@ -3,13 +3,17 @@
   "version": "1.17.7",
   "scripts": {
     "start": "nodemon src/main.coffee",
-    "test": "NODE_ENV=test mocha",
-    "test:watch": "NODE_ENV=test mocha -w --watch-extensions coffee",
+    "test": "NODE_ENV=test nyc mocha",
     "build": "coffee --output build --compile src"
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/viriciti/app-layer-agent.git"
+  },
+  "nyc": {
+    "extension": [
+      ".coffee"
+    ]
   },
   "license": "GPL-3.0",
   "devDependencies": {
@@ -19,14 +23,19 @@
     "mockery": "^2.1.0",
     "mosca": "^2.8.3",
     "nodemon": "^1.18.7",
-    "spy": "^1.0.0"
+    "nyc": "^13.1.0",
+    "spy": "^1.0.0",
+    "unique-names-generator": "^2.0.1"
   },
   "dependencies": {
     "@viriciti/app-layer-logic": "^1.2.3",
     "async": "^2.6.0",
+    "async-mqtt": "^2.0.0",
+    "async.queue": "^0.5.2",
     "config": "^1.30.0",
     "debug": "^3.1.0",
     "dockerode": "^2.5.5",
+    "kleur": "^3.0.1",
     "lodash": "^4.17.11",
     "mqtt": "^2.18.8",
     "mqtt-json-rpc": "^0.9.20",

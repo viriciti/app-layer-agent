@@ -1,64 +1,32 @@
 assert            = require "assert"
-async             = require "async"
-config            = require "config"
 spy               = require "spy"
 { map, identity } = require "lodash"
 
-Docker       = require "../src/lib/Docker"
 StateManager = require "../src/manager/StateManager"
 
-docker = new Docker
-
 describe ".StateManager", ->
-	it "should publish on topic with top level key", (done) ->
+	it "should publish on topic with top level key", ->
 		mocket         = {}
 		mocket.publish = spy identity
 		state          = new StateManager mocket
 
-		state.publishNamespacedState
-			je:
-				moeder: 1
-		, (error) ->
-			assert.ifError error
-			assert.equal mocket.publish.calls[0].return, "devices/test-device/nsState/je"
-			done()
+		state.sendNsState
+			state:
+				ok: false
 
-	it "should not publish when sending equal state object", (done) ->
+		assert.equal mocket.publish.calls[0].return, "devices/test-device/nsState/state"
+
+	it "should not publish when sending equal state object", ->
 		mocket = publish: spy()
 		state  = new StateManager mocket
 
-		async.timesSeries 3, (n, next) ->
-			state.publishNamespacedState
-				je:
-					moeder: "Hetzelfde"
-			, next
-		, (error) ->
-			assert.ifError error
-			assert.equal mocket.publish.callCount, 1
-			done()
+		state.sendNsState same: value: true
+		state.sendNsState same: value: true
+		state.sendNsState same: value: true
 
-	it "should throttle properly", (done) ->
-		mocket         = {}
-		mocket.publish = spy (topic, message) ->
-			message = JSON.parse message
+		assert.equal mocket.publish.callCount, 1
 
-			if @publish.callCount is 0
-				assert.deepEqual message, moeder: 0
-			else if @publish.callCount is 1
-				assert.deepEqual message, moeder: 2
-
-		state = new StateManager mocket
-
-		async.times 3, (i, cb) ->
-			state.publishNamespacedState
-				je:
-					moeder: i
-			, cb
-		, ->
-			assert.equal mocket.publish.callCount, 1
-			done()
-
-	it "should publish when nested values are changed, but not when equal", (done) ->
+	it "should publish when nested values are changed, but not when equal", ->
 		mocket         = {}
 		mocket.publish = spy (topic, message) ->
 			JSON.parse message
@@ -74,50 +42,41 @@ describe ".StateManager", ->
 				{ topLevelKey: { moeder: 1, bla: [ { yolo: "dingen" }, { yolo: "meer dingen", arr: [ { key: "val2" } ] } ] } }
 			]
 
-		async.eachSeries states, (s, next) ->
-			setTimeout ->
-				state.publishNamespacedState s, next
-			, config.state.sendStateThrottleTime
-		, (error) ->
-			lastState = mocket
-				.publish
-				.calls[mocket.publish.callCount - 1]
-				.return
+		Promise.all states.map (object) ->
+			state.sendNsState object
 
-			assert.ifError error
-			assert.equal mocket.publish.callCount, 3
-			assert.deepEqual lastState, states[3].topLevelKey
-			done()
+		lastState = mocket
+			.publish
+			.calls[mocket.publish.callCount - 1]
+			.return
 
+		assert.equal mocket.publish.callCount, 3
+		assert.deepEqual lastState, states[3].topLevelKey
 
-	it "should callback immediatly when sending empty", (done) ->
+	it "should callback immediatly when sending empty", ->
 		mocket = publish: spy()
 		state  = new StateManager mocket
 
-		state.publishNamespacedState null, ->
-			assert.equal mocket.publish.called, 0
-			done()
+		state.sendNsState null
+		assert.equal mocket.publish.called, 0
 
-	it "should put data in separate topics", (done) ->
+	it "should put data in separate topics", ->
 		mocket         = {}
 		mocket.publish = spy identity
 
 		state = new StateManager mocket
 
-		state.publishNamespacedState {
+		state.sendNsState
 			one:   { dingen: "dingen1" }
 			two:   { dingen: "dingen2" }
 			three: { dingen: "dingen3" }
 			four:  { dingen: "dingen4" }
 			five:  { dingen: "dingen5" }
-		}, ->
-			assert.deepEqual map(mocket.publish.calls, "return"), [
-				"devices/test-device/nsState/one"
-				"devices/test-device/nsState/two"
-				"devices/test-device/nsState/three"
-				"devices/test-device/nsState/four"
-				"devices/test-device/nsState/five"
-			]
 
-			docker.dockerEventStream.once "end", done
-			docker.stop()
+		assert.deepEqual map(mocket.publish.calls, "return"), [
+			"devices/test-device/nsState/one"
+			"devices/test-device/nsState/two"
+			"devices/test-device/nsState/three"
+			"devices/test-device/nsState/four"
+			"devices/test-device/nsState/five"
+		]
