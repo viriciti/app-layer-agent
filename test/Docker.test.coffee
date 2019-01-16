@@ -161,12 +161,14 @@ describe ".Docker", ->
 			.getContainer "test-container"
 			.remove force: true
 
-	it "should fail if container has no logs", ->
+	it "should return an empty array if container has no logs", ->
 		docker   = new Docker
 		{ name } = await createTestContainer autoStart: false
 
-		assert.rejects ->
-			docker.getContainerLogs name
+		logs = await docker.getContainerLogs name
+
+		assert.ok isArray logs
+		assert.equal logs.length, 0
 
 	it "should be able to start a container", ->
 		docker   = new Docker
