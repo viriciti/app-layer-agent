@@ -4,7 +4,6 @@
   "scripts": {
     "start": "nodemon src/main.coffee",
     "test": "NODE_ENV=test nyc mocha",
-    "test:watch": "NODE_ENV=test nyc mocha -w --watch-extensions coffee",
     "build": "coffee --output build --compile src"
   },
   "repository": {

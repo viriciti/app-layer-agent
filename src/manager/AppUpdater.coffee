@@ -117,7 +117,7 @@ class AppUpdater
 		await @docker.createContainer containerInfo
 
 		return if @isPastLastInstallStep "Start", appConfig.lastInstallStep
-		await @docker.startContainer id: containerInfo.name
+		await @docker.startContainer containerInfo.name
 
 		log.info "Application #{containerInfo.name} installed correctly"
 

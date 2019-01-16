@@ -1,4 +1,5 @@
 assert     = require "assert"
+{ random } = require "lodash"
 AppUpdater = require "../src/manager/AppUpdater"
 Docker     = require "../src/lib/Docker"
 
@@ -102,7 +103,7 @@ describe ".AppUpdater", ->
 			privileged:    true,
 			version:       "^1.0.0",
 			mounts: [
-				"/this/will/never/exist/ok:/version/mount"
+				"/this/will/never/exist/ok/#{random 0, 1000000}:/version/mount"
 			],
 			applicationName: testContainerName
 

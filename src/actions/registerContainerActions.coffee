@@ -1,5 +1,4 @@
-debug         = (require "debug") "app:registerContainerActions"
-{ promisify } = require "util"
+debug = (require "debug") "app:registerContainerActions"
 
 registerFunction = require "../helpers/registerFunction"
 
@@ -10,11 +9,11 @@ module.exports = ({ taskManager, docker }) ->
 
 	onRestartContainer = ({ id }) ->
 		debug "Restarting container '#{id}'"
-		await promisify(docker.restartContainer.bind docker) { id }
+		await docker.restartContainer id
 
 	onFetchContainerLogs = ({ id }) ->
 		debug "Fetching logs for container '#{id}'"
-		await promisify(docker.getContainerLogs.bind docker) { id }
+		await docker.getContainerLogs id
 
 	registerFunction
 		fn:          onRemoveContainer

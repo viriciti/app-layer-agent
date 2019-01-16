@@ -166,25 +166,25 @@ describe ".Docker", ->
 		{ name } = await createTestContainer autoStart: false
 
 		assert.rejects ->
-			docker.getContainerLogs id: name
+			docker.getContainerLogs name
 
 	it "should be able to start a container", ->
 		docker   = new Docker
 		{ name } = await createTestContainer()
 
-		await docker.startContainer id: name
+		await docker.startContainer name
 
 	it "should be able to get container logs", ->
 		docker   = new Docker
 		{ name } = await createTestContainer autoStart: true
 
-		assert.ok isArray await docker.getContainerLogs id: name
+		assert.ok isArray await docker.getContainerLogs name
 
 	it "should be able to restart a container", ->
 		docker   = new Docker
 		{ name } = await createTestContainer()
 
-		await docker.restartContainer id: name
+		await docker.restartContainer name
 
 	it "should be able to remove a container", ->
 		docker   = new Docker

@@ -204,14 +204,14 @@ class Docker extends EventEmitter
 
 			log.info "Created container #{containerProps.name}"
 
-	startContainer: ({ id }) ->
+	startContainer: (id) ->
 		log.info "Starting container #{id} ..."
 
 		@dockerClient
 			.getContainer id
 			.start()
 
-	restartContainer: ({ id }) ->
+	restartContainer: (id) ->
 		log.info "Restarting container #{id} ..."
 
 		@dockerClient
@@ -231,7 +231,7 @@ class Docker extends EventEmitter
 
 		log.info "Removed #{toRemove.length} containers"
 
-	getContainerLogs: ({ id }) ->
+	getContainerLogs: (id) ->
 		container = @dockerClient.getContainer id
 		options   =
 			stdout: true
