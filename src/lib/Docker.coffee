@@ -158,13 +158,23 @@ class Docker extends EventEmitter
 		containers         = await @dockerClient.listContainers all: true
 		containersDetailed = await Promise.all containers.map (container) =>
 			# container.Names is an array of names in the format "/name"
-			# Only the first name after the slash is needed
+			# only the first name after the slash is needed
 			@getContainerByName container.Names[0].replace "/", ""
 
 		compact containersDetailed
 
 	getContainerByName: (name) =>
-		@serializeContainer await @dockerClient.getContainer(name).inspect size: 1
+		try
+			container = await @dockerClient
+				.getContainer name
+				.inspect size: 1
+
+			return unless container
+
+			@serializeContainer container
+		catch error
+			return undefined if error.statusCode is 404
+			throw error
 
 	serializeContainer: (containerInfo) ->
 		Id:       containerInfo.Id
@@ -186,23 +196,25 @@ class Docker extends EventEmitter
 		sizeFilesystem: containerInfo.SizeRw          # in bytes
 		sizeRootFilesystem: containerInfo.SizeRootFs # in bytes
 		mounts: containerInfo.Mounts.filter (mount) ->
-			hostPath: mount.Source, containerPath: mount.Destination, mode: mount.Mode
+			hostPath:      mount.Source
+			containerPath: mount.Destination
+			mode:          mount.Mode
 		labels: containerInfo.Config.Labels
 
 	createContainer: (containerProps) ->
 		log.info "Creating container #{containerProps.name} ..."
 
 		try
-			@dockerClient.createContainer containerProps
+			await @dockerClient.createContainer containerProps
+
+			log.info "Created container #{containerProps.name}"
 		catch error
 			if error.statusCode is 409
 				log.error "A container with the name #{containerProps.name} already exists"
 			else unless error.statusCode in config.docker.retry.errorCodes
 				log.error error.message
 
-			return error
-
-			log.info "Created container #{containerProps.name}"
+			throw error
 
 	startContainer: (id) ->
 		log.info "Starting container #{id} ..."

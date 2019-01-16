@@ -1,9 +1,11 @@
-{ isEmpty, pickBy, first, debounce, map } = require "lodash"
-queue                                     = require "async.queue"
-debug                                     = (require "debug") "app:AppUpdater"
-{ createGroupsMixin, getAppsToChange }    = require "@viriciti/app-layer-logic"
-log                                       = (require "../lib/Logger") "AppUpdater"
 config                                    = require "config"
+debug                                     = (require "debug") "app:AppUpdater"
+queue                                     = require "async.queue"
+{ createGroupsMixin, getAppsToChange }    = require "@viriciti/app-layer-logic"
+{ isEmpty, pickBy, first, debounce, map } = require "lodash"
+{ yellow }                                = require "kleur"
+
+log = (require "../lib/Logger") "AppUpdater"
 
 class AppUpdater
 	constructor: (@docker, @state, @groupManager) ->
@@ -19,9 +21,7 @@ class AppUpdater
 		groupNames = @groupManager.getGroups()
 		groups     = pickBy groups, (_, name) -> name in groupNames
 
-		@queueUpdate groups, groupNames, (error, result) ->
-			return log.error error.message if error
-			log.info "Device updated correctly!"
+		@queueUpdate groups, groupNames
 
 	queueUpdate: (globalGroups, groups) ->
 		log.info "Pushing update task in queue"
@@ -82,7 +82,8 @@ class AppUpdater
 					short: "Idle"
 					long:  "Idle"
 		catch error
-			log.error "Failed to update: #{error.message}"
+			log.error yellow "Failed to update: #{error.message}"
+
 			@state.sendNsState
 				updateState:
 					short: "ERROR"
@@ -101,30 +102,26 @@ class AppUpdater
 			@installApp app
 
 	installApp: (appConfig) ->
-		containerInfo = @normalizeAppConfiguration appConfig
+		normalized = @normalizeAppConfiguration appConfig
 
 		return if @isPastLastInstallStep "Pull", appConfig.lastInstallStep
-		await @docker.pullImage name: containerInfo.Image
+		await @docker.pullImage name: normalized.Image
 
 		return if @isPastLastInstallStep "Clean", appConfig.lastInstallStep
-
-		container = await @docker.getContainerByName containerInfo.name
-		return unless container
-
-		await @docker.removeContainer id: containerInfo.name, force: true
+		await @docker.removeContainer id: normalized.name, force: true
 
 		return if @isPastLastInstallStep "Create", appConfig.lastInstallStep
-		await @docker.createContainer containerInfo
+		await @docker.createContainer normalized
 
 		return if @isPastLastInstallStep "Start", appConfig.lastInstallStep
-		await @docker.startContainer containerInfo.name
+		await @docker.startContainer normalized.name
 
-		log.info "Application #{containerInfo.name} installed correctly"
+		log.info "Application #{normalized.name} installed correctly"
 
 	isPastLastInstallStep: (currentStepName, endStepName) ->
 		return false unless endStepName?
 
-		steps = [ "Pull", "Clean", "Create", "Start" ]
+		steps = ["Pull", "Clean", "Create", "Start"]
 
 		currentStep = steps.indexOf(currentStepName) + 1
 		endStep     = steps.indexOf(endStepName)     + 1
