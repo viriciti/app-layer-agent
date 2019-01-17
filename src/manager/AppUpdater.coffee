@@ -18,21 +18,26 @@ class AppUpdater
 	handleCollection: (groups) =>
 		return log.error "No applications available (empty groups)" if isEmpty groups
 
+		@groupManager.updateGroupConfigurations groups
+
 		groupNames = @groupManager.getGroups()
-		groups     = pickBy groups, (_, name) -> name in groupNames
+		groups     = pickBy @groupManager.getGroupConfigurations(), (_, name) -> name in groupNames
 
 		@queueUpdate groups, groupNames
 
 	queueUpdate: (globalGroups, groups) ->
+		globalGroups or= @groupManager.getGroupConfigurations()
+		groups       or= @groupManager.getGroups()
+
 		log.info "Pushing update task in queue"
 
 		@queue.push
 			fn: (cb) =>
-				@update globalGroups, groups
+				@doUpdate globalGroups, groups
 					.then -> cb()
 					.catch cb
 
-	update: (globalGroups, groups) ->
+	doUpdate: (globalGroups, groups) ->
 		debug "Updating..."
 		debug "Global groups are", globalGroups
 		debug "Device groups are", groups

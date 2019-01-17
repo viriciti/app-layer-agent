@@ -5,7 +5,8 @@ log                        = (require "../lib/Logger") "GroupManager"
 
 class GroupManager
 	constructor: ->
-		@groups = @readGroupsFromFile()
+		@groups         = @readGroupsFromFile()
+		@configurations = {}
 
 	readGroupsFromFile: ->
 		return [] unless config.groups?.fileLocation
@@ -24,7 +25,13 @@ class GroupManager
 		@groups = without @groups, "default"
 		@groups = ["default", @groups...]
 
+	updateGroupConfigurations: (collection) ->
+		@configurations = { ...collection }
+
 	getGroups: ->
 		@groups
+
+	getGroupConfigurations: ->
+		@configurations
 
 module.exports = GroupManager

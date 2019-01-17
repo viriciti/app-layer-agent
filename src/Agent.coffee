@@ -14,6 +14,9 @@ registerImageActions     = require "./actions/registerImageActions"
 registerDeviceActions    = require "./actions/registerDeviceActions"
 
 class Agent
+	constructor: ->
+		@isUpdatableOnGroups = false
+
 	start: ->
 		@client       = new Client config.mqtt
 		@docker       = new Docker
@@ -25,9 +28,9 @@ class Agent
 			.on "connect", @onConnect
 			.on "close",   @onClose
 
-		@taskManager = new TaskManager  @client.fork()
-		@state       = new StateManager @client.fork(), @docker, @groupManager
-		@appUpdater  = new AppUpdater   @docker,        @state,  @groupManager
+		@taskManager         = new TaskManager  @client.fork()
+		@state               = new StateManager @client.fork(), @docker, @groupManager
+		@appUpdater          = new AppUpdater   @docker,        @state,  @groupManager
 
 		@registerActionHandlers()
 		@client.subscribe ["commands/{id}/+", "devices/{id}/groups"]
@@ -99,9 +102,11 @@ class Agent
 
 	onGroups: (topic, payload) =>
 		@groupManager.updateGroups JSON.parse payload
+		@appUpdater.queueUpdate() if @isUpdatableOnGroups
 
 	onCollection: (topic, payload) =>
-		@appUpdater.handleCollection JSON.parse payload
+		@isUpdatableOnGroups = true unless @isUpdatableOnGroups
+		@appUpdater.queueUpdate JSON.parse payload
 
 	onQueueUpdate: =>
 		@state.sendNsState queue: map @taskManager.getTasks(), (task) ->
