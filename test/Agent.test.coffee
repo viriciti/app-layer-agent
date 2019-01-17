@@ -60,6 +60,7 @@ describe ".Agent", ->
 		assert.equal false, subscribedTopics.includes "global/collections/+"
 		assert.ok subscribedTopics.includes "commands/#{clientId}/+"
 		assert.ok subscribedTopics.includes "devices/#{clientId}/groups"
+		assert.equal false, agent.isUpdatableOnGroups
 
 	it "should send online status when connecting", (done) ->
 		agent        = new Agent
