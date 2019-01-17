@@ -247,7 +247,7 @@ class Docker extends EventEmitter
 			follow: false
 
 		logs   = await container.logs options
-		logs or= []
+		logs or= ""
 
 		logs
 			.split  "\n"
