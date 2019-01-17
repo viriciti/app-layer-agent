@@ -106,7 +106,7 @@ class Agent
 
 	onCollection: (topic, payload) =>
 		@isUpdatableOnGroups = true unless @isUpdatableOnGroups
-		@appUpdater.queueUpdate JSON.parse payload
+		@appUpdater.handleCollection JSON.parse payload
 
 	onQueueUpdate: =>
 		@state.sendNsState queue: map @taskManager.getTasks(), (task) ->
