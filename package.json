@@ -1,10 +1,12 @@
 {
   "name": "app-layer-agent",
-  "version": "1.18.2",
+  "version": "1.19.0",
   "scripts": {
     "start": "nodemon src/main.coffee",
     "test": "NODE_ENV=test nyc mocha",
-    "build": "coffee --output build --compile src"
+    "build": "npm run build:source && npm run build:config",
+    "build:source": "coffee --output build --compile src",
+    "build:config": "coffee --output build/config --compile config"
   },
   "repository": {
     "type": "git",
