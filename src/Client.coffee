@@ -1,5 +1,6 @@
 MQTTPattern                             = require "mqtt-pattern"
 config                                  = require "config"
+fs                                      = require "fs"
 mqtt                                    = require "async-mqtt"
 { EventEmitter }                        = require "events"
 { omit, every, isArray, forEach, uniq } = require "lodash"
@@ -18,8 +19,33 @@ class Client extends EventEmitter
 
 		@subscribedTopics = []
 
+	constructUrl: ->
+		protocol = "mqtt"
+		protocol = "mqtts" if @options.tls
+		host     = @options.host
+		port     = @options.port
+
+		"#{protocol}://#{host}:#{port}"
+
+	withTLS: (options) ->
+		if options.tls
+			options = Object.assign {},
+				key:  fs.readFileSync options.tls.key
+				ca:   fs.readFileSync options.tls.ca
+				cert: fs.readFileSync options.tls.cert
+			, options
+
+			options = omit options, "tls"
+
+		options
+
 	connect: ->
-		@mqtt = mqtt.connect @options
+		log.info "Connecting to #{@constructUrl()} ..."
+
+		url     = @constructURL()
+		options = @withTLS @options
+
+		@mqtt = mqtt.connect url, options
 		@mqtt.on "connect", @onConnect
 
 	onConnect: =>
