@@ -19,7 +19,7 @@ class Client extends EventEmitter
 
 		@subscribedTopics = []
 
-	constructUrl: ->
+	constructURL: ->
 		protocol = "mqtt"
 		protocol = "mqtts" if @options.tls
 		host     = @options.host
@@ -40,10 +40,10 @@ class Client extends EventEmitter
 		options
 
 	connect: ->
-		log.info "Connecting to #{@constructUrl()} ..."
-
 		url     = @constructURL()
 		options = @withTLS @options
+
+		log.info "Connecting to #{url} ..."
 
 		@mqtt = mqtt.connect url, options
 		@mqtt.on "connect", @onConnect
