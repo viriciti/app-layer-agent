@@ -130,6 +130,7 @@ class AppUpdater
 
 		currentStep = steps.indexOf(currentStepName) + 1
 		endStep     = steps.indexOf(endStepName)     + 1
+
 		currentStep > endStep
 
 	normalizeAppConfiguration: (appConfiguration) ->
