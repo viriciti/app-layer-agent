@@ -1,5 +1,7 @@
-{ last, isArray, map } = require "lodash"
-config                 = require "config"
+{ isEqual, map, toPairs, fromPairs } = require "lodash"
+config                               = require "config"
+{ Observable }                       = require "rxjs"
+debug                                = (require "debug") "app:Agent"
 
 log = require("./lib/Logger") "Agent"
 
@@ -12,6 +14,7 @@ Client                   = require "./Client"
 registerContainerActions = require "./actions/registerContainerActions"
 registerImageActions     = require "./actions/registerImageActions"
 registerDeviceActions    = require "./actions/registerDeviceActions"
+getIPAddresses           = require "./helpers/getIPAddresses"
 
 class Agent
 	constructor: ->
@@ -32,8 +35,9 @@ class Agent
 		@state               = new StateManager @client.fork(), @docker, @groupManager
 		@appUpdater          = new AppUpdater   @docker,        @state,  @groupManager
 
+		@observeTunnel()
 		@registerActionHandlers()
-		@client.subscribe ["commands/{id}/+", "devices/{id}/groups"]
+		@client.subscribe ["devices/{id}/groups"]
 
 	onConnect: =>
 		@taskManager
@@ -49,7 +53,6 @@ class Agent
 
 				@state.sendStateToMqtt()
 				@state.sendNsState()
-			.on "commands/{id}/#",      @onCommand
 			.on "devices/{id}/groups",  @onGroups
 			.on "global/collections/+", @onCollection
 
@@ -64,41 +67,8 @@ class Agent
 			.removeListener "logs", @onLogs
 
 		@client
-			.removeListener "commands/{id}/#",      @onCommand
 			.removeListener "devices/{id}/groups",  @onGroups
 			.removeListener "global/collections/+", @onCollection
-
-	onCommand: (topic, payload) =>
-		actionId                    = last topic.split "/"
-		json                        = JSON.parse payload
-		{ action, origin, payload } = json
-
-		forked  = @client.fork()
-		topic   = "commands/#{origin}/#{actionId}/response"
-		payload = [payload] unless isArray payload
-		params  = [
-			[
-				config.mqtt.actions.baseTopic
-				config.mqtt.clientId
-				action
-			]
-				.join "/"
-				.replace /\/{2,}/g, "/"
-			...payload
-		]
-
-		try
-			forked.publish topic, JSON.stringify
-				action:     action
-				data:       await @taskManager.rpc.call ...params
-				statusCode: "OK"
-		catch error
-			log.error error.message
-
-			forked.publish topic, JSON.stringify
-				action:     action
-				data:       error
-				statusCode: "ERROR"
 
 	onGroups: (topic, payload) =>
 		@groupManager.updateGroups JSON.parse payload
@@ -124,6 +94,24 @@ class Agent
 
 		@state.throttledSendAppState() if data.action?.type is "container"
 		@state.publishLog data
+
+	observeTunnel: ->
+		Observable
+			.interval 1000
+			.map ->
+				interfaces = toPairs getIPAddresses()
+				interfaces = interfaces.filter ([name]) ->
+					name.startsWith "tun"
+
+				fromPairs interfaces
+			.distinctUntilChanged (prev, next) ->
+				isEqual(
+					Object.values prev
+					Object.values next
+				)
+			.subscribe (interfaces) =>
+				debug "VPN interfaces updated (one of #{Object.keys(interfaces).join ', '})"
+				@state.sendSystemStateToMqtt()
 
 	registerActionHandlers: ->
 		actionOptions =
