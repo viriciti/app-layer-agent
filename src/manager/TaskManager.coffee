@@ -54,7 +54,7 @@ class TaskManager extends EventEmitter
 			params:   params
 
 	finishTask: ({ name, params, taskId, queuedOn, status, error }) ->
-		@finished.shift() if @finished.length > config.queue.maxStoredTasks
+		@finished.shift() while @finished.length > config.queue.maxStoredTasks
 
 		@finished.push Object.assign {},
 			finished:   true
