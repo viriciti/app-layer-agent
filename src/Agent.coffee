@@ -25,6 +25,7 @@ class Agent
 		@docker       = new Docker
 		@groupManager = new GroupManager
 
+		log.info "[background] Connecting to the MQTT broker"
 		@client.connect()
 
 		@client
@@ -40,6 +41,8 @@ class Agent
 		@client.subscribe ["devices/{id}/groups"]
 
 	onConnect: =>
+		log.info "Connected"
+
 		@taskManager
 			.on "task", @onQueueUpdate
 			.on "done", @onQueueUpdate
@@ -59,6 +62,8 @@ class Agent
 		@state.notifyOnlineStatus()
 
 	onClose: =>
+		log.warn "Connection closed"
+
 		@taskManager
 			.removeListener "task", @onQueueUpdate
 			.removeListener "done", @onQueueUpdate
@@ -71,10 +76,14 @@ class Agent
 			.removeListener "global/collections/+", @onCollection
 
 	onGroups: (topic, payload) =>
+		debug "Groups updated. Queue update: #{if @isUpdatableOnGroups then "yes" else "no"}"
+
 		@groupManager.updateGroups JSON.parse payload
 		@appUpdater.queueUpdate() if @isUpdatableOnGroups
 
 	onCollection: (topic, payload) =>
+		debug "Collection updated"
+
 		@isUpdatableOnGroups = true unless @isUpdatableOnGroups
 		@appUpdater.handleCollection JSON.parse payload
 
@@ -96,6 +105,8 @@ class Agent
 		@state.publishLog data
 
 	observeTunnel: ->
+		log.info "Observing network changes (tunnel only)"
+
 		Observable
 			.interval 1000
 			.map ->
@@ -114,6 +125,8 @@ class Agent
 				@state.sendSystemStateToMqtt()
 
 	registerActionHandlers: ->
+		log.info "Registering action handlers"
+
 		actionOptions =
 			appUpdater:   @appUpdater
 			docker:       @docker

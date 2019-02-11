@@ -4,6 +4,7 @@ config                                       = require "config"
 { EventEmitter }                             = require "events"
 { every, isEmpty, compact, random }          = require "lodash"
 { filterUntaggedImages, getRemovableImages } = require "@viriciti/app-layer-logic"
+debug                                        = (require "debug") "app:Docker"
 
 log              = (require "./Logger") "Docker"
 DockerLogsParser = require "./DockerLogsParser"
@@ -66,6 +67,7 @@ class Docker extends EventEmitter
 				interval: ->
 					retryIn
 				errorFilter: (error) ->
+					debug "Pulling #{name} failed, error code: #{error.statusCode}"
 					return false unless error.statusCode in config.docker.retry.errorCodes
 
 					retryIn = random config.docker.retry.minWaitingTime, config.docker.retry.maxWaitingTime
@@ -97,7 +99,7 @@ class Docker extends EventEmitter
 		images = images.filter (image) ->
 			(image.RepoTags isnt null) and (image.RepoTags[0] isnt "<none>:<none>")
 
-		await Promise.all images.map (image) =>
+		Promise.all images.map (image) =>
 			@getImageByName image.RepoTags[0]
 
 	removableImages: =>
@@ -108,7 +110,7 @@ class Docker extends EventEmitter
 	removeOldImages: =>
 		toRemove = await @removableImages()
 
-		await Promise.all toRemove.map (name) =>
+		Promise.all toRemove.map (name) =>
 			@removeImage name: name
 
 	removeUntaggedImages: ->
@@ -117,7 +119,7 @@ class Docker extends EventEmitter
 
 		log.info "Found #{untaggedImages.length} untagged images"
 
-		await Promise.all untaggedImages.map (image) =>
+		Promise.all untaggedImages.map (image) =>
 			@removeImage
 				id:     image.Id
 				gentle: true
@@ -142,9 +144,7 @@ class Docker extends EventEmitter
 			log.info "Removed image #{entity} successfully"
 		catch error
 			if error.statusCode is 409
-				message = "Conflict: image #{@getShortenedImageId entity} is used by a container"
-				log.warn message
-				message
+				log.warn "Conflict: image #{@getShortenedImageId entity} is used by a container"
 			else
 				log.error error.message
 				throw error
