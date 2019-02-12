@@ -1,7 +1,8 @@
-{ isEqual, map, toPairs, fromPairs } = require "lodash"
 config                               = require "config"
-{ Observable }                       = require "rxjs"
 debug                                = (require "debug") "app:Agent"
+kleur                                = require "kleur"
+{ Observable }                       = require "rxjs"
+{ isEqual, map, toPairs, fromPairs } = require "lodash"
 
 log = require("./lib/Logger") "Agent"
 
@@ -25,7 +26,7 @@ class Agent
 		@docker       = new Docker
 		@groupManager = new GroupManager
 
-		log.info "[background] Connecting to the MQTT broker"
+		log.info kleur.yellow "Connecting to the MQTT broker"
 		@client.connect()
 
 		@client
@@ -41,7 +42,7 @@ class Agent
 		@client.subscribe ["devices/{id}/groups"]
 
 	onConnect: =>
-		log.info "Connected"
+		log.info kleur.green "Connected to the MQTT broker"
 
 		@taskManager
 			.on "task", @onQueueUpdate
@@ -50,6 +51,7 @@ class Agent
 		@docker
 			.on "logs", @onLogs
 
+		log.warn "Waiting for groups before sending state ..."
 		@client
 			.once "devices/{id}/groups", (topic, payload) =>
 				@client.subscribe "global/collections/+"
