@@ -52,6 +52,18 @@ class StateManager
 			topic:   "nsState/containers"
 			message: await promisify(@docker.listContainers.bind @docker)()
 
+	sendSystemStateToMqtt: =>
+		systemInfo = await @docker.getDockerInfo()
+		addresses  = getIpAddresses()
+		appVersion = pkg.version
+
+		@publish
+			topic: "nsState/systemInfo"
+			message: JSON.stringify Object.assign {},
+				systemInfo
+				addresses
+				appVersion: appVersion
+
 	notifyOnlineStatus: =>
 		@publish
 			topic:   "status"

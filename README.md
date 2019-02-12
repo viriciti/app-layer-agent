@@ -26,6 +26,6 @@ The following properties can be configured (environment variables)
 - `TLS_KEY`: TLS key file location. Default: _empty_
 - `TLS_CERT`: TLS certificate file location. Default: _empty_
 - `TLS_CA`: CA certificate file location. Default: _empty_
-- `USE_BALENA`: Use [Balena](https://www.balena.io/engine/) instead of [Docker](https://docs.docker.com/engine/) (only affects socket path). Default: false
+- `USE_BALENA`: Use [Balena Engine](https://www.balena.io/engine/) instead of [Docker](https://docs.docker.com/engine/) (only affects socket path). Default: false
 - `GITLAB_USER_NAME`: GitLab username. Default: _empty_
 - `GITLAB_USER_ACCESS_TOKEN`: GitLab password or access token (recommended to use the latter). Default: _empty_

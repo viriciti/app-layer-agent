@@ -20,16 +20,16 @@ class AppUpdater
 
 		@groupManager.updateGroupConfigurations groups
 
-		groupNames = @groupManager.getGroups()
-		groups     = pickBy @groupManager.getGroupConfigurations(), (_, name) -> name in groupNames
+		names  = @groupManager.getGroups()
+		groups = pickBy @groupManager.getGroupConfigurations(), (_, name) -> name in names
 
-		@queueUpdate groups, groupNames
+		@queueUpdate groups, names
 
 	queueUpdate: (globalGroups, groups) ->
 		globalGroups or= @groupManager.getGroupConfigurations()
 		groups       or= @groupManager.getGroups()
 
-		log.info "Pushing update task in queue"
+		log.info "Update queued"
 
 		@queue.push
 			fn: (cb) =>
@@ -48,6 +48,7 @@ class AppUpdater
 
 		containers  = await @docker.listContainers()
 		currentApps = containers.reduce (keyedContainers, container) ->
+			return keyedContainers unless config.docker.container.allowRemoval
 			return keyedContainers if container.name in config.docker.container.whitelist
 
 			{ keyedContainers..., [container.name]: container }

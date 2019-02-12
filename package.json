@@ -1,6 +1,6 @@
 {
   "name": "app-layer-agent",
-  "version": "1.19.4",
+  "version": "1.20.0",
   "scripts": {
     "start": "nodemon src/main.coffee",
     "test": "NODE_ENV=test nyc mocha",
@@ -42,6 +42,7 @@
     "mqtt": "^2.18.8",
     "mqtt-json-rpc": "^0.9.20",
     "mqtt-pattern": "^1.2.0",
+    "rxjs": "^5.5.12",
     "semver": "^5.5.0",
     "winston": "^2.4.2"
   }
