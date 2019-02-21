@@ -35,6 +35,7 @@ class AppUpdater
 			fn: (cb) =>
 				@doUpdate globalGroups, groups
 					.then ->
+						log.info "Application(s) updated"
 						cb()
 					.catch (error) ->
 						log.error "Failed to update: #{error.message}"
@@ -49,9 +50,9 @@ class AppUpdater
 		return new Error "No default group"                unless globalGroups["default"]
 		return new Error "Default group must appear first" unless first(Object.keys globalGroups) is "default"
 
-		currentApps     = await @docker.listContainers()
-		currentApps     = {} unless config.docker.container.allowRemoval
-		currentApps     = omit currentApps, config.docker.container.whitelist
+		currentApps    = await @docker.listContainers()
+		currentApps    = {} unless config.docker.container.allowRemoval
+		currentApps    = omit currentApps, config.docker.container.whitelist
 		extendedGroups = createGroupsMixin globalGroups,   groups
 		appsToChange   = getAppsToChange   extendedGroups, currentApps
 
@@ -63,16 +64,18 @@ class AppUpdater
 		return unless appsToChange.install.length or appsToChange.remove.length
 
 		message = []
+		install = map(appsToChange.install, "applicationName").join ", "
+		remove  = appsToChange.remove.join ", "
 
 		if appsToChange.install.length
-			message.push "Installing: #{map(appsToChange.install, "applicationName").join ", "}"
-			log.info "Installing #{appsToChange.install.length} application(s)"
+			message.push "Installing: #{install}"
+			log.info "Installing application(s): #{install}"
 		else
 			log.warn "No applications to install"
 
 		if appsToChange.remove.length
-			message.push "Removing: #{appsToChange.remove.join ", "}"
-			log.info "Removing #{appsToChange.remove.length} application(s)"
+			message.push "Removing: #{install}"
+			log.info "Removing application(s): #{remove}"
 		else
 			log.warn "No applications to remove"
 
@@ -118,7 +121,6 @@ class AppUpdater
 		await @docker.pullImage name: normalized.Image
 
 		return if @isPastLastInstallStep "Clean", appConfig.lastInstallStep
-		
 		await @docker.removeContainer id: normalized.name, force: true
 
 		return if @isPastLastInstallStep "Create", appConfig.lastInstallStep
@@ -126,8 +128,6 @@ class AppUpdater
 
 		return if @isPastLastInstallStep "Start", appConfig.lastInstallStep
 		await @docker.startContainer normalized.name
-
-		log.info "Application #{normalized.name} installed correctly"
 
 	isPastLastInstallStep: (currentStepName, endStepName) ->
 		return false unless endStepName?
