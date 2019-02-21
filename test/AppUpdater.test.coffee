@@ -41,7 +41,9 @@ describe ".AppUpdater", ->
 						manual: false
 
 	after ->
-		docker.removeContainer testContainerName
+		docker
+			.removeContainer id: testContainerName
+			.catch ->
 
 	afterEach ->
 		groups = {}

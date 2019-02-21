@@ -1,4 +1,4 @@
-{ random, take, isArray }                    = require "lodash"
+{ random, take, isArray, isPlainObject }     = require "lodash"
 assert                                       = require "assert"
 config                                       = require "config"
 spy                                          = require "spy"
@@ -130,13 +130,15 @@ describe ".Docker", ->
 		docker     = new Docker
 		containers = await docker.listContainers()
 
-		assert.ok isArray containers
+		assert.ok isPlainObject containers
 
-	it "should inspect containers when listing", ->
+	it.only "should inspect containers when listing", ->
 		new Promise (resolve) ->
 			docker                    = new Docker
+			getContainerByName        = docker.getContainerByName
 			docker.getContainerByName = spy ->
 				resolve() if @getContainerByName.called
+				getContainerByName ...arguments
 
 			docker.listContainers()
 

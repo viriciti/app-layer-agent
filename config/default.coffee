@@ -35,6 +35,6 @@ module.exports =
 			errorCodes:     [502, 503, 504]
 		registryAuth:
 			credentials:
-				username:      process.env.GITLAB_USER_NAME
-				password:      process.env.GITLAB_USER_ACCESS_TOKEN
+				username:      process.env.GITLAB_USERNAME     or process.env.GITLAB_USER_NAME
+				password:      process.env.GITLAB_ACCESS_TOKEN or process.env.GITLAB_USER_ACCESS_TOKEN
 				serveraddress: "https://index.docker.io/v1"

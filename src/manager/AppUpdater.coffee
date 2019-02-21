@@ -1,9 +1,9 @@
-config                                    = require "config"
-debug                                     = (require "debug") "app:AppUpdater"
-queue                                     = require "async.queue"
-{ createGroupsMixin, getAppsToChange }    = require "@viriciti/app-layer-logic"
-{ isEmpty, pickBy, first, debounce, map } = require "lodash"
-{ yellow }                                = require "kleur"
+config                                          = require "config"
+debug                                           = (require "debug") "app:AppUpdater"
+queue                                           = require "async.queue"
+{ createGroupsMixin, getAppsToChange }          = require "@viriciti/app-layer-logic"
+{ isEmpty, pickBy, first, debounce, map, omit } = require "lodash"
+{ yellow }                                      = require "kleur"
 
 log = (require "../lib/Logger") "AppUpdater"
 
@@ -34,8 +34,11 @@ class AppUpdater
 		@queue.push
 			fn: (cb) =>
 				@doUpdate globalGroups, groups
-					.then -> cb()
-					.catch cb
+					.then ->
+						cb()
+					.catch (error) ->
+						log.error "Failed to update: #{error.message}"
+						cb error
 
 	doUpdate: (globalGroups, groups) ->
 		debug "Updating..."
@@ -46,15 +49,16 @@ class AppUpdater
 		return new Error "No default group"                unless globalGroups["default"]
 		return new Error "Default group must appear first" unless first(Object.keys globalGroups) is "default"
 
-		containers  = await @docker.listContainers()
-		currentApps = containers.reduce (keyedContainers, container) ->
-			return keyedContainers unless config.docker.container.allowRemoval
-			return keyedContainers if container.name in config.docker.container.whitelist
-
-			{ keyedContainers..., [container.name]: container }
-		, {}
+		currentApps     = await @docker.listContainers()
+		currentApps     = {} unless config.docker.container.allowRemoval
+		currentApps     = omit currentApps, config.docker.container.whitelist
 		extendedGroups = createGroupsMixin globalGroups,   groups
 		appsToChange   = getAppsToChange   extendedGroups, currentApps
+
+		@state.sendNsState
+			updateState:
+				short: "Idle"
+				long:  "Idle"
 
 		return unless appsToChange.install.length or appsToChange.remove.length
 
@@ -79,7 +83,7 @@ class AppUpdater
 
 		try
 			await @docker.removeUntaggedImages()
-			await @removeApps appsToChange.remove
+			await @removeApps  appsToChange.remove
 			await @installApps appsToChange.install
 			await @docker.removeOldImages()
 
@@ -114,6 +118,7 @@ class AppUpdater
 		await @docker.pullImage name: normalized.Image
 
 		return if @isPastLastInstallStep "Clean", appConfig.lastInstallStep
+		
 		await @docker.removeContainer id: normalized.name, force: true
 
 		return if @isPastLastInstallStep "Create", appConfig.lastInstallStep

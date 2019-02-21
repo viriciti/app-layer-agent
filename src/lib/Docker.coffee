@@ -2,7 +2,7 @@ Dockerode                                    = require "dockerode"
 async                                        = require "async"
 config                                       = require "config"
 { EventEmitter }                             = require "events"
-{ every, isEmpty, compact, random }          = require "lodash"
+{ every, isEmpty, compact, random, pickBy }  = require "lodash"
 { filterUntaggedImages, getRemovableImages } = require "@viriciti/app-layer-logic"
 debug                                        = (require "debug") "app:Docker"
 
@@ -152,11 +152,15 @@ class Docker extends EventEmitter
 	listContainers: =>
 		containers         = await @dockerClient.listContainers all: true
 		containersDetailed = await Promise.all containers.map (container) =>
-			# container.Names is an array of names in the format "/name"
-			# only the first name after the slash is needed
-			@getContainerByName container.Names[0].replace "/", ""
+			name = container.Names[0].replace "/", ""
+			[name, await @getContainerByName name]
 
-		compact containersDetailed
+		containersDetailed.reduce (grouped, [name, container]) ->
+			return grouped unless container
+
+			grouped[name] = container
+			grouped
+		, {}
 
 	getContainerByName: (name) =>
 		try
@@ -168,7 +172,8 @@ class Docker extends EventEmitter
 
 			@serializeContainer container
 		catch error
-			return undefined if error.statusCode is 404
+			return log.warn "Container #{name} not found" if error.statusCode is 404
+			
 			throw error
 
 	serializeContainer: (containerInfo) ->
@@ -226,17 +231,15 @@ class Docker extends EventEmitter
 			.restart()
 
 	removeContainer: ({ id, force = false }) ->
-		log.info "Removing container '#{id}'"
+		log.info "Removing container #{id} ..."
 
-		containers = await @listContainers()
-		toRemove   = containers.filter (c) -> c.name.includes id
-
-		await Promise.all toRemove.map (container) =>
-			@dockerClient
-				.getContainer container.Id
+		try
+			await @dockerClient
+				.getContainer id
 				.remove force: force
-
-		log.info "Removed #{toRemove.length} containers"
+		catch error
+			return Promise.resolve() if error.statusCode is 404
+			throw error
 
 	getContainerLogs: (id) ->
 		container = @dockerClient.getContainer id
