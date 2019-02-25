@@ -42,9 +42,9 @@ class AppUpdater
 		debug "Global groups are", globalGroups
 		debug "Device groups are", groups
 
-		return new Error "No global groups"                if isEmpty globalGroups
-		return new Error "No default group"                unless globalGroups["default"]
-		return new Error "Default group must appear first" unless first(Object.keys globalGroups) is "default"
+		throw new Error "No global groups"                if isEmpty globalGroups
+		throw new Error "No default group"                unless globalGroups["default"]
+		throw new Error "Default group must appear first" unless first(Object.keys globalGroups) is "default"
 
 		containers  = await @docker.listContainers()
 		currentApps = containers.reduce (keyedContainers, container) ->
@@ -55,6 +55,12 @@ class AppUpdater
 		, {}
 		extendedGroups = createGroupsMixin globalGroups,   groups
 		appsToChange   = getAppsToChange   extendedGroups, currentApps
+
+
+		@state.sendNsState
+			updateState:
+				short: "Idle"
+				long:  "Idle"
 
 		return unless appsToChange.install.length or appsToChange.remove.length
 

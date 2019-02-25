@@ -57,9 +57,9 @@ class Docker extends EventEmitter
 			pullInterval = setInterval =>
 				@emit "logs",
 					message: "Pulling #{name}"
-					image: name
-					type:  "action"
-					time:  Date.now()
+					image:   name
+					type:    "action"
+					time:    Date.now()
 			, 3000
 
 			async.retry

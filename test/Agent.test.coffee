@@ -27,8 +27,6 @@ describe ".Agent", ->
 		await agent.start()
 
 		subscribedTopics = agent.client.subscribedTopics
-
-		assert.ok subscribedTopics.includes "commands/#{clientId}/+"
 		assert.ok subscribedTopics.includes "devices/#{clientId}/groups"
 
 	it "should subscribe to collections topic after receiving groups", (done) ->
@@ -58,7 +56,6 @@ describe ".Agent", ->
 
 		assert.equal clientId, config.mqtt.clientId
 		assert.equal false, subscribedTopics.includes "global/collections/+"
-		assert.ok subscribedTopics.includes "commands/#{clientId}/+"
 		assert.ok subscribedTopics.includes "devices/#{clientId}/groups"
 		assert.equal false, agent.isUpdatableOnGroups
 
