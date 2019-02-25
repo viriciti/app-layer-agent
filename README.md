@@ -3,9 +3,9 @@
 App Layer Agent is an application management tool that is used to replicate an environment shared with other devices.  
 The environment is configured and pushed by the [App Layer Control](https://github.com/viriciti/app-layer-control).
 
-> ### ⚠ Before running it locally
+> #### ⚠️ Before running it locally
 >
-> App Layer Agent is rather aggressive in keeping your environment in sync with how App Layer Control wants the environment to be. If you run this on your local machine, note that it will start removing containers (applications) immediatly. To prevent this, create a local configuration file (in `./config`) and disable removal like so:
+> App Layer Agent is rather aggressive in keeping your environment in sync with how App Layer Control wants the environment to be. If you run this on your local machine, note that it will start removing containers (applications) **immediatly**. To prevent this, create a local configuration file (in `./config`) and disable removal like so:
 >
 > ```
 > {
@@ -27,6 +27,35 @@ The environment is configured and pushed by the [App Layer Control](https://gith
 - MQTT
 
 ## Getting started
+
+### Before running it locally
+
+App Layer Agent is rather aggressive in keeping your environment in sync with how App Layer Control wants the environment to be. If you run this on your local machine, note that it will start removing containers (applications) **immediatly**. To prevent this, create a local configuration file (in `./config`) and disable removal like so:
+
+```
+{
+  "docker": {
+    "container": {
+      "allowRemoval": false
+    }
+  }
+}
+```
+
+Alternatively, you can keep the configuration as is, and configure the containers you want to keep regardless of what App Layer Agent wants:
+
+```
+{
+  "docker": {
+    "container": {
+      "allowRemoval": true,
+      "whitelist": ["app-layer-agent", "device-manager"]
+    }
+  }
+}
+```
+
+### Development
 
 1. Fork the project
 2. Run `npm install` to install the npm modules
