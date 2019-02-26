@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Each application that is installed is given their own `/data` folder which they can use to persist data.  
   These volumes are not controlled, cannot be ovewritten by App Layer Control and are never cleaned up.  
   It is up to you to manage the volume and clean it up manually if you deem it necessary.
+- Create a shared volume between the containers.  
+  **Note**: Every container is given `rw` rights, thus any container can overwrite files not created by them.
 
 ### Changed
 - Default to Balena, use Docker when the environment variable `USE_DOCKER` is set.

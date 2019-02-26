@@ -1,19 +1,16 @@
-config                                          = require "config"
-debug                                           = (require "debug") "app:AppUpdater"
-queue                                           = require "async.queue"
-{ createGroupsMixin, getAppsToChange }          = require "@viriciti/app-layer-logic"
-{ isEmpty, pickBy, first, debounce, map, omit } = require "lodash"
-{ yellow }                                      = require "kleur"
+Queue                                                    = require "p-queue"
+config                                                   = require "config"
+debug                                                    = (require "debug") "app:AppUpdater"
+{ createGroupsMixin, getAppsToChange }                   = require "@viriciti/app-layer-logic"
+{ isEmpty, pickBy, first, debounce, map, omit, partial } = require "lodash"
+{ yellow }                                               = require "kleur"
 
 log = (require "../lib/Logger") "AppUpdater"
 
 class AppUpdater
 	constructor: (@docker, @state, @groupManager) ->
 		@handleCollection = debounce @handleCollection, 2000
-		@queue            = queue @handleUpdate
-
-	handleUpdate: ({ fn }, cb) ->
-		fn cb
+		@queue            = new Queue()
 
 	handleCollection: (groups) =>
 		return log.error "No applications available (empty groups)" if isEmpty groups
@@ -29,19 +26,16 @@ class AppUpdater
 		globalGroups or= @groupManager.getGroupConfigurations()
 		groups       or= @groupManager.getGroups()
 
-		log.info "Update queued"
+		log.info "Queueing update ..."
 
-		@queue.push
-			fn: (cb) =>
-				@doUpdate globalGroups, groups
-					.then ->
-						log.info "Application(s) updated"
-						cb()
-					.catch (error) ->
-						log.error "Failed to update: #{error.message}"
-						cb error
+		try
+			await @docker.createSharedVolume()
+			await @queue.add partial @doUpdate, globalGroups, groups
+			log.info "Application(s) updated"
+		catch error
+			log.error "Failed to update: #{error.message or error}"
 
-	doUpdate: (globalGroups, groups) ->
+	doUpdate: (globalGroups, groups) =>
 		debug "Updating..."
 		debug "Global groups are", globalGroups
 		debug "Device groups are", groups
@@ -118,7 +112,6 @@ class AppUpdater
 		normalized      = @normalizeAppConfiguration appConfig
 		{ name, Image } = normalized
 
-
 		return if @isPastLastInstallStep "Pull", appConfig.lastInstallStep
 		await @docker.pullImage name: Image
 
@@ -144,18 +137,25 @@ class AppUpdater
 		currentStep > endStep
 
 	appendAppVolume: (name, mounts = []) ->
-		mountSource      = @docker.createVolumeName name
-		mountDestination = "/data"
-		mountFlag        = "rw"
+		mountsToAppend = [
+			source:      @docker.getVolumeName name
+			destination: "/data"
+			flag:        "rw"
+		,
+			source:      @docker.getSharedVolumeName()
+			destination: "/share"
+			flag:        "rw"
+		]
 
 		mounts
 			.filter (mount) ->
 				[source, destination] = mount.split ":"
-				return true unless destination is mountDestination
+				return true unless destination in map mountsToAppend, "destination"
 
 				log.error "Not mounting source #{source} to #{destination} for #{name}: destination is reserved"
 				false
-			.concat [mountSource, mountDestination, mountFlag].join ":"
+			.concat mountsToAppend.map ({ source, destination, flag }) ->
+				[source, destination, flag].join ":"
 
 	normalizeAppConfiguration: (appConfiguration) ->
 		{ containerName, mounts } = appConfiguration
