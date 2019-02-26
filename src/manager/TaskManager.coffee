@@ -1,5 +1,5 @@
 RPC                        = require "mqtt-json-rpc"
-async                      = require "async"
+Queue                      = require "p-queue"
 config                     = require "config"
 { EventEmitter }           = require "events"
 { last, uniqueId, uniqBy } = require "lodash"
@@ -11,7 +11,7 @@ class TaskManager extends EventEmitter
 		@rpc        = new RPC mqtt
 		@registered = []
 		@finished   = []
-		@queue      = async.queue @handleTask
+		@queue      = new Queue()
 
 	handleTask: ({ name, fn, params, taskId, queuedOn }, cb) =>
 		baseProperties =
@@ -38,20 +38,33 @@ class TaskManager extends EventEmitter
 				cb error
 
 	addTask: ({ name, fn, params }) ->
-		@queue.push
-			name:     name
-			fn:       fn
+		baseProperties =
+			name:     @getTaskName name
 			params:   params
-			taskId:   uniqueId()
 			queuedOn: Date.now()
-		, (error) =>
-			@emit "done",
+			taskId:   uniqueId()
+
+		try
+			@emit "task",
 				name:   @getTaskName name
 				params: params
 
-		@emit "task",
-			name:     @getTaskName name
-			params:   params
+			await @queue.add -> fn ...params
+
+			@finishTask Object.assign {},
+				baseProperties
+				status: "ok"
+		catch error
+			@finishTask Object.assign {},
+				baseProperties
+				status: "error"
+				error:
+					message: error.message
+					code:    error.code
+		finally
+			@emit "done",
+				name:   @getTaskName name
+				params: params
 
 	finishTask: ({ name, params, taskId, queuedOn, status, error }) ->
 		@finished.shift() while @finished.length > config.queue.maxStoredTasks

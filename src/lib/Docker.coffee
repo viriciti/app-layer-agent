@@ -261,4 +261,34 @@ class Docker extends EventEmitter
 
 		id.substring 7, 7 + 12
 
+	getVolumeName: (name) ->
+		"app-layer-agent-#{name}"
+
+	getSharedVolumeName: ->
+		"shared-app-layer-agent"
+
+	createSharedVolume: (name) ->
+		try
+			volume = await @dockerClient.getVolume @getSharedVolumeName()
+			data   = await volume.inspect()
+
+			debug "Shared volume exists (internal: #{data.Name})"
+		catch error
+			throw error unless error.statusCode is 404
+
+			debug "Creating shared volume ..."
+			await @dockerClient.createVolume Name: @getSharedVolumeName()
+
+	createVolumeIfNotExists: (name) ->
+		try
+			volume = await @dockerClient.getVolume @getVolumeName name
+			data   = await volume.inspect()
+
+			debug "Volume exists for #{name} (internal: #{data.Name})"
+		catch error
+			throw error unless error.statusCode is 404
+
+			debug "Creating volume for #{name} ..."
+			await @dockerClient.createVolume Name: @getVolumeName name
+
 module.exports = Docker
