@@ -135,7 +135,7 @@
   "check_scope": {
     "module": "coffeescope2",
     "level": "error",
-    "environments": ["builtin", "node", "es6", "mocha", "browser"],
+    "environments": ["builtin", "node", "es6", "mocha"],
     "overwrite": false,
     "shadow_exceptions": ["err", "error", "cb"],
     "hoist_local": false

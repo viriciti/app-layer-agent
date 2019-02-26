@@ -2,7 +2,7 @@ Dockerode                                    = require "dockerode"
 async                                        = require "async"
 config                                       = require "config"
 { EventEmitter }                             = require "events"
-{ every, isEmpty, compact, random }          = require "lodash"
+{ every, isEmpty, random }                   = require "lodash"
 { filterUntaggedImages, getRemovableImages } = require "@viriciti/app-layer-logic"
 debug                                        = (require "debug") "app:Docker"
 
@@ -48,7 +48,7 @@ class Docker extends EventEmitter
 		kernel:     info.KernelVersion
 
 	pullImage: ({ name }) =>
-		log.info "Pulling image '#{name}'..."
+		log.info "Downloading #{name} ..."
 
 		new Promise (resolve, reject) =>
 			credentials  = null
@@ -56,7 +56,7 @@ class Docker extends EventEmitter
 			retryIn      = 1000 * 60
 			pullInterval = setInterval =>
 				@emit "logs",
-					message: "Pulling #{name}"
+					message: "Downloading #{name} ..."
 					image: name
 					type:  "action"
 					time:  Date.now()
@@ -67,11 +67,11 @@ class Docker extends EventEmitter
 				interval: ->
 					retryIn
 				errorFilter: (error) ->
-					debug "Pulling #{name} failed, error code: #{error.statusCode}"
+					debug "Downloading #{name} failed, error code: #{error.statusCode}"
 					return false unless error.statusCode in config.docker.retry.errorCodes
 
 					retryIn = random config.docker.retry.minWaitingTime, config.docker.retry.maxWaitingTime
-					log.warn "Pulling #{name} failed, retrying after #{retryIn}ms"
+					log.warn "Downloading #{name} failed, retrying after #{retryIn}ms"
 
 					true
 			, (next) =>
@@ -81,7 +81,7 @@ class Docker extends EventEmitter
 				@dockerClient.pull name, options, (error, stream) =>
 					if error
 						if error.message.match /unauthorized/
-							log.error "No permission to pull #{name}"
+							log.error "No permission to download #{name}"
 						else unless error.statusCode in config.docker.retry.errorCodes
 							log.error error.message
 
@@ -152,11 +152,15 @@ class Docker extends EventEmitter
 	listContainers: =>
 		containers         = await @dockerClient.listContainers all: true
 		containersDetailed = await Promise.all containers.map (container) =>
-			# container.Names is an array of names in the format "/name"
-			# only the first name after the slash is needed
-			@getContainerByName container.Names[0].replace "/", ""
+			name = container.Names[0].replace "/", ""
+			[name, await @getContainerByName name]
 
-		compact containersDetailed
+		containersDetailed.reduce (grouped, [name, container]) ->
+			return grouped unless container
+
+			grouped[name] = container
+			grouped
+		, {}
 
 	getContainerByName: (name) =>
 		try
@@ -168,7 +172,7 @@ class Docker extends EventEmitter
 
 			@serializeContainer container
 		catch error
-			return undefined if error.statusCode is 404
+			return log.warn "Container #{name} not found" if error.statusCode is 404
 			throw error
 
 	serializeContainer: (containerInfo) ->
@@ -197,12 +201,12 @@ class Docker extends EventEmitter
 		labels: containerInfo.Config.Labels
 
 	createContainer: (containerProps) ->
-		log.info "Creating container #{containerProps.name} ..."
+		debug "Creating container #{containerProps.name} ..."
 
 		try
 			await @dockerClient.createContainer containerProps
 
-			log.info "Created container #{containerProps.name}"
+			debug "Created container #{containerProps.name}"
 		catch error
 			if error.statusCode is 409
 				log.error "A container with the name #{containerProps.name} already exists"
@@ -212,31 +216,29 @@ class Docker extends EventEmitter
 			throw error
 
 	startContainer: (id) ->
-		log.info "Starting container #{id} ..."
+		debug "Starting container #{id} ..."
 
 		@dockerClient
 			.getContainer id
 			.start()
 
 	restartContainer: (id) ->
-		log.info "Restarting container #{id} ..."
+		debug "Restarting container #{id} ..."
 
 		@dockerClient
 			.getContainer id
 			.restart()
 
 	removeContainer: ({ id, force = false }) ->
-		log.info "Removing container '#{id}'"
+		debug "Removing container #{id} ..."
 
-		containers = await @listContainers()
-		toRemove   = containers.filter (c) -> c.name.includes id
-
-		await Promise.all toRemove.map (container) =>
-			@dockerClient
-				.getContainer container.Id
+		try
+			await @dockerClient
+				.getContainer id
 				.remove force: force
-
-		log.info "Removed #{toRemove.length} containers"
+		catch error
+			return Promise.resolve() if error.statusCode is 404
+			throw error
 
 	getContainerLogs: (id) ->
 		container = @dockerClient.getContainer id
