@@ -132,7 +132,7 @@ describe ".Docker", ->
 
 		assert.ok isPlainObject containers
 
-	it.only "should inspect containers when listing", ->
+	it "should inspect containers when listing", ->
 		new Promise (resolve) ->
 			docker                    = new Docker
 			getContainerByName        = docker.getContainerByName
