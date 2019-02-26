@@ -1,12 +1,10 @@
-_             = require "lodash"
-config        = require "config"
-{ promisify } = require "util"
+{ throttle, isString, isEqual, isPlainObject, map } = require "lodash"
+config                                              = require "config"
+{ promisify }                                       = require "util"
 
 pkg            = require "../../package.json"
 getIpAddresses = require "../helpers/getIPAddresses"
 log            = (require "../lib/Logger") "StateManager"
-
-{ isPlainObject, isEqual, map } = _
 
 class StateManager
 	constructor: (@socket, @docker, @groupManager) ->
@@ -15,12 +13,12 @@ class StateManager
 		@nsState            = {}
 		@throttledPublishes = {}
 
-		@throttledSendState    = _.throttle @sendStateToMqtt,    config.state.sendStateThrottleTime
-		@throttledSendAppState = _.throttle @sendAppStateToMqtt, config.state.sendAppStateThrottleTime
+		@throttledSendState    = throttle @sendStateToMqtt,    config.state.sendStateThrottleTime
+		@throttledSendAppState = throttle @sendAppStateToMqtt, config.state.sendAppStateThrottleTime
 
 	publish: (options) =>
 		message = options.message
-		message = JSON.stringify message unless _.isString message
+		message = JSON.stringify message unless isString message
 		topic   = [
 			"devices"
 			@clientId
@@ -28,7 +26,6 @@ class StateManager
 		]
 			.join "/"
 			.replace /\/{2,}/, "/"
-
 
 		promisify(@socket.publish.bind @socket) topic, message, options.opts
 
@@ -97,14 +94,12 @@ class StateManager
 			@docker.getDockerInfo()
 		]
 
-		groups     = @groupManager.getGroups()
 		systemInfo = Object.assign {},
 			systemInfo
 			getIpAddresses()
 			appVersion: pkg.version
 
 		Object.assign {},
-			{ groups }
 			{ systemInfo }
 			{ images }
 			{ containers }

@@ -1,19 +1,16 @@
-config                                          = require "config"
-debug                                           = (require "debug") "app:AppUpdater"
-queue                                           = require "async.queue"
-{ createGroupsMixin, getAppsToChange }          = require "@viriciti/app-layer-logic"
-{ isEmpty, pickBy, first, debounce, map, omit } = require "lodash"
-{ yellow }                                      = require "kleur"
+Queue                                                    = require "p-queue"
+config                                                   = require "config"
+debug                                                    = (require "debug") "app:AppUpdater"
+{ createGroupsMixin, getAppsToChange }                   = require "@viriciti/app-layer-logic"
+{ isEmpty, pickBy, first, debounce, map, omit, partial } = require "lodash"
+kleur                                                    = require "kleur"
 
 log = (require "../lib/Logger") "AppUpdater"
 
 class AppUpdater
 	constructor: (@docker, @state, @groupManager) ->
 		@handleCollection = debounce @handleCollection, 2000
-		@queue            = queue @handleUpdate
-
-	handleUpdate: ({ fn }, cb) ->
-		fn cb
+		@queue            = new Queue()
 
 	handleCollection: (groups) =>
 		return log.error "No applications available (empty groups)" if isEmpty groups
@@ -29,19 +26,16 @@ class AppUpdater
 		globalGroups or= @groupManager.getGroupConfigurations()
 		groups       or= @groupManager.getGroups()
 
-		log.info "Update queued"
+		log.info "Queueing update ..."
 
-		@queue.push
-			fn: (cb) =>
-				@doUpdate globalGroups, groups
-					.then ->
-						log.info "Application(s) updated"
-						cb()
-					.catch (error) ->
-						log.error "Failed to update: #{error.message}"
-						cb error
+		try
+			await @docker.createSharedVolume()
+			await @queue.add partial @doUpdate, globalGroups, groups
+			log.info "Application(s) updated"
+		catch error
+			log.error "Failed to update: #{error.message or error}"
 
-	doUpdate: (globalGroups, groups) ->
+	doUpdate: (globalGroups, groups) =>
 		debug "Updating..."
 		debug "Global groups are", globalGroups
 		debug "Device groups are", groups
@@ -95,7 +89,7 @@ class AppUpdater
 					short: "Idle"
 					long:  "Idle"
 		catch error
-			log.error yellow "Failed to update: #{error.message}"
+			log.error kleur.yellow "Failed to update: #{error.message}"
 
 			@state.sendNsState
 				updateState:
@@ -115,19 +109,22 @@ class AppUpdater
 			@installApp app
 
 	installApp: (appConfig) ->
-		normalized = @normalizeAppConfiguration appConfig
+		normalized      = @normalizeAppConfiguration appConfig
+		{ name, Image } = normalized
 
 		return if @isPastLastInstallStep "Pull", appConfig.lastInstallStep
-		await @docker.pullImage name: normalized.Image
+		await @docker.pullImage name: Image
 
 		return if @isPastLastInstallStep "Clean", appConfig.lastInstallStep
-		await @docker.removeContainer id: normalized.name, force: true
+		await @docker.removeContainer id: name, force: true
+
+		await @docker.createVolumeIfNotExists name
 
 		return if @isPastLastInstallStep "Create", appConfig.lastInstallStep
 		await @docker.createContainer normalized
 
 		return if @isPastLastInstallStep "Start", appConfig.lastInstallStep
-		await @docker.startContainer normalized.name
+		await @docker.startContainer name
 
 	isPastLastInstallStep: (currentStepName, endStepName) ->
 		return false unless endStepName?
@@ -139,8 +136,32 @@ class AppUpdater
 
 		currentStep > endStep
 
+	appendAppVolume: (name, mounts = []) ->
+		mountsToAppend = [
+			source:      @docker.getVolumeName name
+			destination: "/data"
+			flag:        "rw"
+		,
+			source:      @docker.getSharedVolumeName()
+			destination: "/share"
+			flag:        "rw"
+		]
+
+		mounts
+			.filter (mount) ->
+				[source, destination] = mount.split ":"
+				return true unless destination in map mountsToAppend, "destination"
+
+				log.error "Not mounting source #{source} to #{destination} for #{kleur.cyan name}: destination is reserved"
+				false
+			.concat mountsToAppend.map ({ source, destination, flag }) ->
+				[source, destination, flag].join ":"
+
 	normalizeAppConfiguration: (appConfiguration) ->
-		name:         appConfiguration.containerName
+		{ containerName, mounts } = appConfiguration
+		mountsWithAppVolume       = @appendAppVolume containerName, mounts
+
+		name:         containerName
 		AttachStdin:  not appConfiguration.detached
 		AttachStdout: not appConfiguration.detached
 		AttachStderr: not appConfiguration.detached
@@ -149,7 +170,7 @@ class AppUpdater
 		Image:        appConfiguration.fromImage
 		Labels:       appConfiguration.labels #NOTE https://docs.docker.com/config/labels-custom-metadata/#value-guidelines
 		HostConfig:
-			Binds:         appConfiguration.mounts
+			Binds:         mountsWithAppVolume
 			NetworkMode:   appConfiguration.networkMode
 			Privileged:    not not appConfiguration.privileged
 			RestartPolicy: Name: appConfiguration.restartPolicy
