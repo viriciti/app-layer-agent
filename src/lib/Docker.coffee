@@ -269,9 +269,7 @@ class Docker extends EventEmitter
 			volume = await @dockerClient.getVolume @createVolumeName name
 			data   = await volume.inspect()
 
-			console.log data
-
-			debug "Volume exists for #{name} (internal: #{data.Name}, used: #{data.UsageData.Size} bytes)"
+			debug "Volume exists for #{name} (internal: #{data.Name})"
 		catch error
 			throw error unless error.statusCode is 404
 
