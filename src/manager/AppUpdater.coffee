@@ -3,7 +3,7 @@ config                                                   = require "config"
 debug                                                    = (require "debug") "app:AppUpdater"
 { createGroupsMixin, getAppsToChange }                   = require "@viriciti/app-layer-logic"
 { isEmpty, pickBy, first, debounce, map, omit, partial } = require "lodash"
-{ yellow }                                               = require "kleur"
+kleur                                                    = require "kleur"
 
 log = (require "../lib/Logger") "AppUpdater"
 
@@ -89,7 +89,7 @@ class AppUpdater
 					short: "Idle"
 					long:  "Idle"
 		catch error
-			log.error yellow "Failed to update: #{error.message}"
+			log.error kleur.yellow "Failed to update: #{error.message}"
 
 			@state.sendNsState
 				updateState:
@@ -152,7 +152,7 @@ class AppUpdater
 				[source, destination] = mount.split ":"
 				return true unless destination in map mountsToAppend, "destination"
 
-				log.error "Not mounting source #{source} to #{destination} for #{name}: destination is reserved"
+				log.error "Not mounting source #{source} to #{destination} for #{kleur.cyan name}: destination is reserved"
 				false
 			.concat mountsToAppend.map ({ source, destination, flag }) ->
 				[source, destination, flag].join ":"
