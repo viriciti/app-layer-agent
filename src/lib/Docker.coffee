@@ -261,4 +261,21 @@ class Docker extends EventEmitter
 
 		id.substring 7, 7 + 12
 
+	createVolumeName: (name) ->
+		"app-layer-agent-#{name}"
+
+	createVolumeIfNotExists: (name) ->
+		try
+			volume = await @dockerClient.getVolume @createVolumeName name
+			data   = await volume.inspect()
+
+			console.log data
+
+			debug "Volume exists for #{name} (internal: #{data.Name}, used: #{data.UsageData.Size} bytes)"
+		catch error
+			throw error unless error.statusCode is 404
+
+			debug "Creating volume for #{name} ..."
+			await @dockerClient.createVolume Name: @createVolumeName name
+
 module.exports = Docker

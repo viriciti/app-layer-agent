@@ -115,19 +115,23 @@ class AppUpdater
 			@installApp app
 
 	installApp: (appConfig) ->
-		normalized = @normalizeAppConfiguration appConfig
+		normalized      = @normalizeAppConfiguration appConfig
+		{ name, Image } = normalized
+
 
 		return if @isPastLastInstallStep "Pull", appConfig.lastInstallStep
-		await @docker.pullImage name: normalized.Image
+		await @docker.pullImage name: Image
 
 		return if @isPastLastInstallStep "Clean", appConfig.lastInstallStep
-		await @docker.removeContainer id: normalized.name, force: true
+		await @docker.removeContainer id: name, force: true
+
+		await @docker.createVolumeIfNotExists name
 
 		return if @isPastLastInstallStep "Create", appConfig.lastInstallStep
 		await @docker.createContainer normalized
 
 		return if @isPastLastInstallStep "Start", appConfig.lastInstallStep
-		await @docker.startContainer normalized.name
+		await @docker.startContainer name
 
 	isPastLastInstallStep: (currentStepName, endStepName) ->
 		return false unless endStepName?
@@ -139,8 +143,25 @@ class AppUpdater
 
 		currentStep > endStep
 
+	appendAppVolume: (name, mounts = []) ->
+		mountSource      = @docker.createVolumeName name
+		mountDestination = "/data"
+		mountFlag        = "rw"
+
+		mounts
+			.filter (mount) ->
+				[source, destination] = mount.split ":"
+				return true unless destination is mountDestination
+
+				log.error "Not mounting source #{source} to #{destination} for #{name}: destination is reserved"
+				false
+			.concat [mountSource, mountDestination, mountFlag].join ":"
+
 	normalizeAppConfiguration: (appConfiguration) ->
-		name:         appConfiguration.containerName
+		{ containerName, mounts } = appConfiguration
+		mountsWithAppVolume       = @appendAppVolume containerName, mounts
+
+		name:         containerName
 		AttachStdin:  not appConfiguration.detached
 		AttachStdout: not appConfiguration.detached
 		AttachStderr: not appConfiguration.detached
@@ -149,7 +170,7 @@ class AppUpdater
 		Image:        appConfiguration.fromImage
 		Labels:       appConfiguration.labels #NOTE https://docs.docker.com/config/labels-custom-metadata/#value-guidelines
 		HostConfig:
-			Binds:         appConfiguration.mounts
+			Binds:         mountsWithAppVolume
 			NetworkMode:   appConfiguration.networkMode
 			Privileged:    not not appConfiguration.privileged
 			RestartPolicy: Name: appConfiguration.restartPolicy
