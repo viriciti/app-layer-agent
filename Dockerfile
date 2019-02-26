@@ -14,6 +14,7 @@ COPY package.json /app
 
 # Configure properties
 ENV NODE_ENV production
+ENV USE_DOCKER true
 
 CMD ["node", "/app/build/main.js"]
 
