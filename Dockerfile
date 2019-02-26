@@ -1,24 +1,44 @@
-FROM viriciti/app-layer-base-image-armhf-alpine-node:10
-
-RUN [ "cross-build-start" ]
+# STAGE 1
+FROM viriciti/app-layer-base-image-armhf-alpine-node:10 as builder
+RUN ["cross-build-start"]
 
 # Create app directory
 RUN mkdir -p /app
 WORKDIR /app
 
 # Build app
-COPY build /app/build
-COPY build/config /app/config
-
-# Install production dependencies
+COPY src /app/src
+COPY config /app/config
 COPY package.json /app
-RUN rm -rf node_modules && \
+RUN npm install --only dev
+RUN npm run build
+
+RUN rm -r node_modules && \
     npm install --production
 
-# Configure properties
-ENV NODE_ENV production
-ENV USE_DOCKER true
+RUN ["cross-build-end"]
+
+# STAGE 2
+FROM viriciti/app-layer-base-image-armhf-alpine-node:10
+
+# Configure environment
+ENV NODE_CONFIG_DIR=/app/config
+ENV NODE_ENV=production
+
+# Non-generic OS
+ENV USE_DOCKER=true
+ENV TLS_KEY=/certs/ivh.key
+ENV TLS_CERT=/certs/ivh.crt
+ENV TLS_CA=/certs/ca.crt
+
+# Install production dependencies
+# RUN ls /app
+COPY --from=builder /app/build /app/build
+COPY --from=builder /app/build/config /app/config
+COPY --from=builder /app/node_modules /app/node_modules
+COPY --from=builder /app/package.json /app/package.json
+
+WORKDIR /app
 
 CMD ["node", "/app/build/main.js"]
 
-RUN [ "cross-build-end" ]
