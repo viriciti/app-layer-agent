@@ -27,7 +27,7 @@ module.exports =
 		socketPath: if process.env.USE_DOCKER then "/var/run/docker.sock" else "/var/run/balena-engine.sock"
 		container:
 			allowRemoval: true
-			whitelist:    ["app-layer-agent"]
+			whitelist:    ["app-layer-agent", "device-manager"]
 		retry:
 			minWaitingTime: 5 * 1000 * 60  # 5 minutes
 			maxWaitingTime: 15 * 1000 * 60 # 15 minutes
