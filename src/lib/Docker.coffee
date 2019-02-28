@@ -268,6 +268,8 @@ class Docker extends EventEmitter
 		"shared-app-layer-agent"
 
 	createSharedVolume: (name) ->
+		return unless config.features.appVolume
+
 		try
 			volume = await @dockerClient.getVolume @getSharedVolumeName()
 			data   = await volume.inspect()
@@ -280,6 +282,8 @@ class Docker extends EventEmitter
 			await @dockerClient.createVolume Name: @getSharedVolumeName()
 
 	createVolumeIfNotExists: (name) ->
+		return unless config.features.appVolume
+
 		try
 			volume = await @dockerClient.getVolume @getVolumeName name
 			data   = await volume.inspect()

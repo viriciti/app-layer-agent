@@ -1,6 +1,9 @@
 os = require "os"
 
 module.exports =
+	features:
+		appVolume: false
+
 	mqtt:
 		host:     process.env.MQTT_ENDPOINT or "localhost"
 		port:     process.env.MQTT_PORT     or 1883
