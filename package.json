@@ -2,7 +2,7 @@
   "name": "app-layer-agent",
   "version": "1.21.1",
   "scripts": {
-    "start": "nodemon src/main.coffee",
+    "start": "NODE_ENV=development USE_DOCKER=true nodemon src/main.coffee",
     "test": "NODE_ENV=test nyc mocha",
     "build": "npm run build:source && npm run build:config",
     "build:source": "coffee --output build --compile src",
@@ -33,7 +33,7 @@
     "@viriciti/app-layer-logic": "1.2.3",
     "async": "2.6.0",
     "async-mqtt": "2.0.0",
-    "config": "1.30.0",
+    "config": "3.0.1",
     "debug": "3.1.0",
     "dockerode": "2.5.5",
     "kleur": "3.0.1",

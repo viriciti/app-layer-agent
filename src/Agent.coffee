@@ -26,7 +26,6 @@ class Agent
 		@docker       = new Docker
 		@groupManager = new GroupManager
 
-		log.info kleur.yellow "Connecting to the MQTT broker"
 		@client.connect()
 
 		@client

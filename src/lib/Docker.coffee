@@ -48,7 +48,7 @@ class Docker extends EventEmitter
 		kernel:     info.KernelVersion
 
 	pullImage: ({ name }) =>
-		log.info "Downloading #{name} ..."
+		log.info "Downloading #{name} (retrying on status codes #{config.docker.retry.errorCodes.join ', '})..."
 
 		new Promise (resolve, reject) =>
 			credentials  = null
