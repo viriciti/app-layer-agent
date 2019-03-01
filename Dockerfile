@@ -25,12 +25,6 @@ FROM viriciti/app-layer-base-image-armhf-alpine-node:10
 ENV NODE_CONFIG_DIR=/app/config
 ENV NODE_ENV=production
 
-# Non-generic OS
-ENV USE_DOCKER=true
-ENV TLS_KEY=/certs/ivh.key
-ENV TLS_CERT=/certs/ivh.crt
-ENV TLS_CA=/certs/ca.crt
-
 # Install production dependencies
 # RUN ls /app
 COPY --from=builder /app/build /app/build
