@@ -4,6 +4,7 @@ fs                                      = require "fs"
 mqtt                                    = require "async-mqtt"
 { EventEmitter }                        = require "events"
 { omit, every, isArray, forEach, uniq } = require "lodash"
+kleur                                   = require "kleur"
 
 log = require("./lib/Logger") "Client"
 
@@ -43,12 +44,16 @@ class Client extends EventEmitter
 		url     = @constructURL()
 		options = @withTLS @options
 
-		log.info "Connecting to #{url} ..."
+		log.info kleur.yellow "Connecting to #{url} ..."
 
 		@mqtt = mqtt.connect url, options
-		@mqtt.on "connect", @onConnect
+		@mqtt
+			.on "connect", @onConnect
+			.on "error",   @onError
 
 	onConnect: =>
+		log.info kleur.green "Connected to the broker"
+
 		@mqtt
 			.on "packetreceive", @onPacket
 			.on "error",         @onError
@@ -57,6 +62,9 @@ class Client extends EventEmitter
 			.on "close",         @onClose
 
 		@emit "connect"
+
+	onError: (error) ->
+		log.error kleur.red error.message
 
 	onPacket: (packet) =>
 		return unless packet

@@ -48,7 +48,7 @@ class Docker extends EventEmitter
 		kernel:     info.KernelVersion
 
 	pullImage: ({ name }) =>
-		log.info "Downloading #{name} ..."
+		log.info "Downloading #{name} (retrying on status codes #{config.docker.retry.errorCodes.join ', '})..."
 
 		new Promise (resolve, reject) =>
 			credentials  = null
@@ -268,6 +268,8 @@ class Docker extends EventEmitter
 		"shared-app-layer-agent"
 
 	createSharedVolume: (name) ->
+		return unless config.features.appVolume
+
 		try
 			volume = await @dockerClient.getVolume @getSharedVolumeName()
 			data   = await volume.inspect()
@@ -280,6 +282,8 @@ class Docker extends EventEmitter
 			await @dockerClient.createVolume Name: @getSharedVolumeName()
 
 	createVolumeIfNotExists: (name) ->
+		return unless config.features.appVolume
+
 		try
 			volume = await @dockerClient.getVolume @getVolumeName name
 			data   = await volume.inspect()

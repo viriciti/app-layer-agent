@@ -1,6 +1,9 @@
 os = require "os"
 
 module.exports =
+	features:
+		appVolume: false
+
 	mqtt:
 		host:     process.env.MQTT_ENDPOINT or "localhost"
 		port:     process.env.MQTT_PORT     or 1883
@@ -27,7 +30,7 @@ module.exports =
 		socketPath: if process.env.USE_DOCKER then "/var/run/docker.sock" else "/var/run/balena-engine.sock"
 		container:
 			allowRemoval: true
-			whitelist:    ["app-layer-agent"]
+			whitelist:    ["app-layer-agent", "device-manager"]
 		retry:
 			minWaitingTime: 5 * 1000 * 60  # 5 minutes
 			maxWaitingTime: 15 * 1000 * 60 # 15 minutes

@@ -26,17 +26,13 @@ class AppUpdater
 		globalGroups or= @groupManager.getGroupConfigurations()
 		groups       or= @groupManager.getGroups()
 
-		log.info "Queueing update ..."
-
 		try
 			await @docker.createSharedVolume()
 			await @queue.add partial @doUpdate, globalGroups, groups
-			log.info "Application(s) updated"
 		catch error
 			log.error "Failed to update: #{error.message or error}"
 
 	doUpdate: (globalGroups, groups) =>
-		debug "Updating..."
 		debug "Global groups are", globalGroups
 		debug "Device groups are", groups
 
@@ -44,18 +40,24 @@ class AppUpdater
 		throw new Error "No default group"                unless globalGroups["default"]
 		throw new Error "Default group must appear first" unless first(Object.keys globalGroups) is "default"
 
+		log.info "Calculating updates ..."
+
 		currentApps    = await @docker.listContainers()
 		currentApps    = {} unless config.docker.container.allowRemoval
 		currentApps    = omit currentApps, config.docker.container.whitelist
 		extendedGroups = createGroupsMixin globalGroups,   groups
 		appsToChange   = getAppsToChange   extendedGroups, currentApps
+		updatesCount   = appsToChange.install.length + appsToChange.remove.length
 
 		@state.sendNsState
 			updateState:
 				short: "Idle"
 				long:  "Idle"
 
-		return unless appsToChange.install.length or appsToChange.remove.length
+		if updatesCount
+			log.info kleur.cyan "#{updatesCount} application(s) to update/remove"
+		else
+			return log.info kleur.green "Applications are up to date."
 
 		message = []
 		install = map(appsToChange.install, "applicationName").join ", "
@@ -97,6 +99,8 @@ class AppUpdater
 					long:  error.message
 		finally
 			@state.throttledSendState()
+
+		appsToChange.install.length + appsToChange.remove.length
 
 	removeApps: (apps) ->
 		await Promise.all apps.map (app) =>
@@ -159,7 +163,7 @@ class AppUpdater
 
 	normalizeAppConfiguration: (appConfiguration) ->
 		{ containerName, mounts } = appConfiguration
-		mountsWithAppVolume       = @appendAppVolume containerName, mounts
+		mounts                    = @appendAppVolume containerName, mounts if config.features.appVolume
 
 		name:         containerName
 		AttachStdin:  not appConfiguration.detached
@@ -170,7 +174,7 @@ class AppUpdater
 		Image:        appConfiguration.fromImage
 		Labels:       appConfiguration.labels #NOTE https://docs.docker.com/config/labels-custom-metadata/#value-guidelines
 		HostConfig:
-			Binds:         mountsWithAppVolume
+			Binds:         mounts
 			NetworkMode:   appConfiguration.networkMode
 			Privileged:    not not appConfiguration.privileged
 			RestartPolicy: Name: appConfiguration.restartPolicy

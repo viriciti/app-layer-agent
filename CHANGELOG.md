@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.21.2
+### Changed
+- Disable automatic creation of volume by default (can be enabled with `features.appVolume`).
+
+## 1.21.1
+### Fixed
+- Fix Dockerfile from not being able to be built by itself.
+
 ## 1.21.0
 ### Added
 - Each application that is installed is given their own `/data` folder which they can use to persist data.  
