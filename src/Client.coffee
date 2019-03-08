@@ -15,10 +15,13 @@ class Client extends EventEmitter
 		@options  = config.mqtt
 		@clientId = @options.clientId
 		@options  = { ...@options, ...@options.extraOptions, will: @getWill() }
-		@options  = omit @options, "tls" unless every @options.tls
+		@options  = omit @options, "tls" unless @isTLSEnabled()
 		@options  = omit @options, "extraOptions"
 
 		@subscribedTopics = []
+
+	isTLSEnabled: ->
+		every @options.tls
 
 	constructURL: ->
 		protocol = "mqtt"
@@ -29,22 +32,24 @@ class Client extends EventEmitter
 		"#{protocol}://#{host}:#{port}"
 
 	withTLS: (options) ->
-		if options.tls
-			options = Object.assign {},
-				key:  fs.readFileSync options.tls.key
-				ca:   fs.readFileSync options.tls.ca
-				cert: fs.readFileSync options.tls.cert
-			, options
+		return options unless @isTLSEnabled()
 
-			options = omit options, "tls"
+		options = Object.assign {},
+			key:  fs.readFileSync options.tls.key
+			ca:   fs.readFileSync options.tls.ca
+			cert: fs.readFileSync options.tls.cert
+		, options
 
-		options
+		options = omit options, "tls"
 
 	connect: ->
 		url     = @constructURL()
 		options = @withTLS @options
 
-		log.info kleur.yellow "Connecting to #{url} ..."
+		if @isTLSEnabled()
+			log.info kleur.yellow "Connecting to #{url} (secure) ..."
+		else
+			log.info kleur.yellow "Connecting to #{url} ..."
 
 		@mqtt = mqtt.connect url, options
 		@mqtt
@@ -77,9 +82,6 @@ class Client extends EventEmitter
 			return unless MQTTPattern.matches expanded, packet.topic
 
 			@emit topic, packet.topic, payload
-
-	onError: (error) ->
-		log.error "Could not connect to the MQTT broker: #{error.message}"
 
 	onReconnect: ->
 		log.warn "Reconnecting to the MQTT broker ..."
