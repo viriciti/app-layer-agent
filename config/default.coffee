@@ -1,17 +1,22 @@
 os = require "os"
 
+getEnv = (name, defaultValue) ->
+	process.env["APP_LAYER_#{name}"] or
+	process.env[name]                or
+	defaultValue
+
 module.exports =
 	features:
 		appVolume: false
 
 	mqtt:
-		host:     process.env.MQTT_ENDPOINT or "localhost"
-		port:     process.env.MQTT_PORT     or 1883
+		host:     getEnv "MQTT_ENDPOINT", "localhost"
+		port:     getEnv "MQTT_PORT",     1883
 		clientId: os.hostname()
 		tls:
-			key:  process.env.TLS_KEY
-			cert: process.env.TLS_CERT
-			ca:   process.env.TLS_CA
+			key:  getEnv "TLS_KEY"
+			cert: getEnv "TLS_CERT"
+			ca:   getEnv "TLS_CA"
 		extraOptions:
 			keepalive:          60
 			reconnectPeriod:    5000
@@ -27,7 +32,7 @@ module.exports =
 		maxStoredTasks: 15
 
 	docker:
-		socketPath: if process.env.USE_DOCKER then "/var/run/docker.sock" else "/var/run/balena-engine.sock"
+		socketPath: if getEnv "USE_DOCKER" then "/var/run/docker.sock" else "/var/run/balena-engine.sock"
 		container:
 			allowRemoval: true
 			whitelist:    ["app-layer-agent", "device-manager"]
@@ -38,6 +43,6 @@ module.exports =
 			errorCodes:     [502, 503, 504]
 		registryAuth:
 			credentials:
-				username:      process.env.GITLAB_USERNAME     or process.env.GITLAB_USER_NAME
-				password:      process.env.GITLAB_ACCESS_TOKEN or process.env.GITLAB_USER_ACCESS_TOKEN
+				username:      getEnv "GITLAB_USERNAME",     process.env.GITLAB_USER_NAME
+				password:      getEnv "GITLAB_ACCESS_TOKEN", process.env.GITLAB_USER_ACCESS_TOKEN
 				serveraddress: "https://index.docker.io/v1"
