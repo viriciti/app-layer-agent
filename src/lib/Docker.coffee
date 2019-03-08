@@ -14,10 +14,13 @@ class Docker extends EventEmitter
 		super()
 
 		log.warn "Container removal is disabled" unless config.docker.container.allowRemoval
+		log.warn "Authentication is disabled"    unless @isAuthenticationEnabled()
 
 		@dockerClient = new Dockerode socketPath: config.docker.socketPath
-
 		@listenForEvents()
+
+	isAuthenticationEnabled: ->
+		every config.docker.registryAuth.credentials
 
 	listenForEvents: ->
 		onData = (event) =>
@@ -52,7 +55,7 @@ class Docker extends EventEmitter
 
 		new Promise (resolve, reject) =>
 			credentials  = null
-			credentials  = config.docker.registryAuth.credentials if every config.docker.registryAuth.credentials
+			credentials  = config.docker.registryAuth.credentials if @isAuthenticationEnabled()
 			retryIn      = 1000 * 60
 			pullInterval = setInterval =>
 				@emit "logs",
