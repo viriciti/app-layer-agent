@@ -139,7 +139,7 @@ describe ".AppUpdater", ->
 
 		updater.handleCollection configurations
 
-	it.only "should return last known configurations if queueing an update without arguments", (done) ->
+	it "should return last known configurations if queueing an update without arguments", (done) ->
 		@timeout 3000
 
 		mockDocker                        = createSharedVolume: -> Promise.resolve()
