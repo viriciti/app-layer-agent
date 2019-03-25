@@ -81,7 +81,8 @@ class AppUpdater
 				long:  message.join "\n"
 
 		try
-			await @docker.verifyAuthentication() if @docker.isAuthenticationEnabled()
+			# Verifying authentication does not work properly for GitLab registries
+			# await @docker.verifyAuthentication() if @docker.isAuthenticationEnabled()
 			await @docker.removeUntaggedImages()
 			await @removeApps  appsToChange.remove
 			await @installApps appsToChange.install

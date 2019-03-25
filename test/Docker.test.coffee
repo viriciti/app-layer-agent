@@ -11,16 +11,32 @@ delay                                            = require "./utils/delay"
 mockDockerPull = (docker, returnStatusCode = 200) ->
 	throw new Error "Invalid Docker client" unless docker instanceof Docker
 
-	docker
-		.dockerode
-		.pull = (name, options, cb) ->
-			setTimeout ->
-				error            = new Error
-				error.statusCode = returnStatusCode
-				error.json       = {}
+	docker.dockerode.pull = (name, options, cb) ->
+		setTimeout ->
+			error            = new Error
+			error.statusCode = returnStatusCode
+			error.json       = {}
 
-				cb error
-			, random 100, 500
+			cb error
+		, random 100, 500
+
+	docker
+
+mockCorruptedLayer = (docker) ->
+	throw new Error "Invalid Docker client" unless docker instanceof Docker
+
+	docker.dockerode.pull = (name, options, cb) ->
+		layer = [
+			"failed to register layer: rename"
+			"/var/lib/docker/image/overlay/layerdb/tmp/layer-123"
+			"/var/lib/docker/image/overlay/layerdb/sha256/abc:"
+			"directory not empty"
+		]
+		message    = layer.join " "
+		error      = new Error message
+		error.code = "ERR_CORRUPTED_LAYER"
+
+		cb error
 
 	docker
 
@@ -101,9 +117,16 @@ describe ".Docker", ->
 
 			assert.equal error.statusCode, 502
 
+	it "should treat corrupted layer as an error", ->
+		docker = new Docker
+		docker = mockCorruptedLayer docker
+
+		assert.rejects ->
+			docker.pullImage "hello-world"
+		, /corrupted layer/
+
 	it "should be able to return a shortened image id", ->
 		docker    = new Docker
-
 		hash      = "sha256:87f1a6e84e0012a52c1a176619256c3f0222591b78a266188f9fc983a383b64a"
 		shortened = docker.getShortenedImageId hash
 		assert.equal shortened, "87f1a6e84e00"

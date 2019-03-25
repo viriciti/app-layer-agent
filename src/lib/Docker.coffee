@@ -5,6 +5,7 @@ config                                       = require "config"
 { every, isEmpty, random }                   = require "lodash"
 { filterUntaggedImages, getRemovableImages } = require "@viriciti/app-layer-logic"
 debug                                        = (require "debug") "app:Docker"
+kleur                                        = require "kleur"
 
 log              = (require "./Logger") "Docker"
 DockerLogsParser = require "./DockerLogsParser"
@@ -63,6 +64,30 @@ class Docker extends EventEmitter
 					time:  Date.now()
 			, 3000
 
+			# Unauthorized errors are rejected
+			# due to the lack of recovery
+			handleUnauthorized = (error) ->
+				message = "No permission to download #{name}"
+				log.error kleur.yellow message
+
+				error      = new Error message
+				error.code = "ERR_DOCKER_UNAUTHORIZED"
+				reject error
+
+			handleCorruptedLayer = (error) ->
+				[, source, target] = /\/(.+) \/(.+):/g.exec error.message
+
+				message = "Layer corrupted: #{source} → #{target}"
+				log.error kleur.red message
+
+				error        = new Error message
+				error.code   = "ERR_CORRUPTED_LAYER"
+				error.source = source
+				error.target = target
+				reject error
+
+			handleGenericError = ->
+
 			async.retry
 				times: config.docker.retry.maxAttempts
 				interval: ->
@@ -81,11 +106,9 @@ class Docker extends EventEmitter
 
 				@dockerode.pull name, options, (error, stream) =>
 					if error
-						if error.message.match /unauthorized/
-							log.error "No permission to download #{name}"
-						else unless error.statusCode in config.docker.retry.errorCodes
-							log.error error.message
-
+						handleUnauthorized   error if error.message.match /unauthorized/i
+						handleCorruptedLayer error if error.message.match /failed to register layer/i
+						handleGenericError   error unless error.statusCode in config.docker.registry.errorCodes
 						return next error
 
 					@dockerode.modem.followProgress stream, next
@@ -301,6 +324,7 @@ class Docker extends EventEmitter
 			await @dockerode.checkAuth config.docker.registryAuth.credentials
 			true
 		catch original
+			console.log original
 			error          = new Error "Incorrect username or password"
 			error.code     = "ERR_AUTH_INCORRECT"
 			error.original = original
