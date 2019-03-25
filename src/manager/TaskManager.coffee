@@ -1,8 +1,7 @@
-RPC                        = require "mqtt-json-rpc"
-Queue                      = require "p-queue"
-config                     = require "config"
-{ EventEmitter }           = require "events"
-{ last, uniqueId, uniqBy } = require "lodash"
+RPC                = require "mqtt-json-rpc"
+Queue              = require "p-queue"
+{ EventEmitter }   = require "events"
+{ last, uniqueId } = require "lodash"
 
 class TaskManager extends EventEmitter
 	constructor: (mqtt) ->
@@ -11,38 +10,17 @@ class TaskManager extends EventEmitter
 		@rpc        = new RPC mqtt
 		@registered = []
 		@finished   = []
+		@tasks      = []
 		@queue      = new Queue()
 
-	handleTask: ({ name, fn, params, taskId, queuedOn }, cb) =>
-		baseProperties =
-			name:     @getTaskName name
-			params:   params
-			queuedOn: queuedOn
-			taskId:   taskId
-
-		fn ...params
-			.then =>
-				@finishTask Object.assign {},
-					baseProperties
-					status: "ok"
-
-				cb()
-			.catch (error) =>
-				@finishTask Object.assign {},
-					baseProperties
-					status: "error"
-					error:
-						message: error.message
-						code:    error.code
-
-				cb error
-
 	addTask: ({ name, fn, params }) ->
-		baseProperties =
+		task =
 			name:     @getTaskName name
 			params:   params
 			queuedOn: Date.now()
 			taskId:   uniqueId()
+
+		@tasks.push task
 
 		try
 			@emit "task",
@@ -52,11 +30,11 @@ class TaskManager extends EventEmitter
 			await @queue.add -> fn ...params
 
 			@finishTask Object.assign {},
-				baseProperties
+				task
 				status: "ok"
 		catch error
 			@finishTask Object.assign {},
-				baseProperties
+				task
 				status: "error"
 				error:
 					message: error.message
@@ -67,38 +45,28 @@ class TaskManager extends EventEmitter
 				params: params
 
 	finishTask: ({ name, params, taskId, queuedOn, status, error }) ->
-		@finished.shift() while @finished.length > config.queue.maxStoredTasks
+		predicate    = (task) -> taskId is task.taskId
+		finishedTask = @tasks.find predicate
 
-		@finished.push Object.assign {},
+		throw new Error "Task #{taskId} not found" unless finishedTask
+
+		taskIndex    = @tasks.findIndex predicate
+		finishedTask = Object.assign {},
+			finishedTask
 			finished:   true
 			finishedAt: Date.now()
-			name:       name
-			params:     params
-			queuedOn:   queuedOn
 			status:     status
-			taskId:     taskId
 		,
 			error: error if error
 
-	getTaskName: (fullTaskName) ->
-		last fullTaskName?.split "/"
+		@tasks[taskIndex] = finishedTask
+		@tasks[taskIndex]
+
+	getTaskName: (name) ->
+		last name?.split "/"
 
 	getTasks: ->
-		extractFromQueuedTask = (source, finished) =>
-			finished:   finished
-			name:       @getTaskName source.name
-			params:     source.params
-			taskId:     source.taskId
-			queuedOn:   source.queuedOn
-			finishedAt: source.finishedAt
-
-		uniqBy ([]
-			.concat @queue.workersList().map ({ data }) ->
-				extractFromQueuedTask data, false
-			.concat @queue._tasks.toArray().map (task) ->
-				extractFromQueuedTask task, false
-			.concat @finished
-		), "taskId"
+		@tasks
 
 	register: (name, fn) ->
 		@unregister name if @registered.includes name

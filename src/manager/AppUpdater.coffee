@@ -81,6 +81,7 @@ class AppUpdater
 				long:  message.join "\n"
 
 		try
+			await @docker.verifyAuthentication() if @docker.isAuthenticationEnabled()
 			await @docker.removeUntaggedImages()
 			await @removeApps  appsToChange.remove
 			await @installApps appsToChange.install

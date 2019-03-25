@@ -1,8 +1,8 @@
-{ random, take, isArray, isPlainObject }     = require "lodash"
-assert                                       = require "assert"
-config                                       = require "config"
-spy                                          = require "spy"
-{ filterUntaggedImages, getRemovableImages } = require "@viriciti/app-layer-logic"
+{ random, take, isArray, isPlainObject, clone } = require "lodash"
+assert                                          = require "assert"
+config                                          = require "config"
+spy                                             = require "spy"
+{ filterUntaggedImages, getRemovableImages }    = require "@viriciti/app-layer-logic"
 
 Docker                                           = require "../src/lib/Docker"
 { createTestContainer, removeAllTestContainers } = require "./utils/container"
@@ -12,7 +12,7 @@ mockDockerPull = (docker, returnStatusCode = 200) ->
 	throw new Error "Invalid Docker client" unless docker instanceof Docker
 
 	docker
-		.dockerClient
+		.dockerode
 		.pull = (name, options, cb) ->
 			setTimeout ->
 				error            = new Error
@@ -142,6 +142,25 @@ describe ".Docker", ->
 
 			docker.listContainers()
 
+	it "should check for authentication", ->
+		docker = new Docker
+		return @skip() unless docker.isAuthenticationEnabled()
+
+		credentials = clone config.docker.registryAuth.credentials
+		invalid     = { ...credentials, username: "this-does-not-exist", password: "*****" }
+
+		config.docker.registryAuth.credentials = invalid
+		assert.rejects ->
+			docker.verifyAuthentication()
+		, /incorrect username or password/i
+
+		config.docker.registryAuth.credentials = credentials
+		assert.doesNotReject ->
+			docker.verifyAuthentication()
+		,
+			/incorrect username or password/i
+			"Did you configure GitLab (Docker) credentials?"
+
 	it "should be able to pull an image", ->
 		@timeout 10000
 
@@ -159,7 +178,7 @@ describe ".Docker", ->
 
 		await delay 1000
 		await docker
-			.dockerClient
+			.dockerode
 			.getContainer "test-container"
 			.remove force: true
 

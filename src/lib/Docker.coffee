@@ -16,11 +16,11 @@ class Docker extends EventEmitter
 		log.warn "Container removal is disabled" unless config.docker.container.allowRemoval
 		log.warn "Authentication is disabled"    unless @isAuthenticationEnabled()
 
-		@dockerClient = new Dockerode socketPath: config.docker.socketPath
+		@dockerode = new Dockerode socketPath: config.docker.socketPath
 		@listenForEvents()
 
 	isAuthenticationEnabled: ->
-		every config.docker.registryAuth.credentials
+		config.docker.registryAuth.credentials and every config.docker.registryAuth.credentials
 
 	listenForEvents: ->
 		onData = (event) =>
@@ -34,7 +34,7 @@ class Docker extends EventEmitter
 			@emit "error", error
 
 		parser = new DockerLogsParser @
-		stream = await @dockerClient.getEvents()
+		stream = await @dockerode.getEvents()
 		stream
 			.on "data",  onData
 			.on "error", onError
@@ -44,7 +44,7 @@ class Docker extends EventEmitter
 				stream.push null
 
 	getDockerInfo: =>
-		info = await @dockerClient.version()
+		info = await @dockerode.version()
 
 		apiVersion: info.ApiVersion
 		version:    info.Version
@@ -54,10 +54,8 @@ class Docker extends EventEmitter
 		log.info "Downloading #{name} (retrying on status codes #{config.docker.retry.errorCodes.join ', '})..."
 
 		new Promise (resolve, reject) =>
-			credentials  = null
-			credentials  = config.docker.registryAuth.credentials if @isAuthenticationEnabled()
-			retryIn      = 1000 * 60
-			pullInterval = setInterval =>
+			retryIn       = 1000 * 60
+			pullInterval  = setInterval =>
 				@emit "logs",
 					message: "Downloading #{name} ..."
 					image: name
@@ -79,9 +77,9 @@ class Docker extends EventEmitter
 					true
 			, (next) =>
 				options            = {}
-				options.authconfig = credentials if credentials
+				options.authconfig = config.docker.registryAuth.credentials if @isAuthenticationEnabled()
 
-				@dockerClient.pull name, options, (error, stream) =>
+				@dockerode.pull name, options, (error, stream) =>
 					if error
 						if error.message.match /unauthorized/
 							log.error "No permission to download #{name}"
@@ -90,7 +88,7 @@ class Docker extends EventEmitter
 
 						return next error
 
-					@dockerClient.modem.followProgress stream, next
+					@dockerode.modem.followProgress stream, next
 			, (error) ->
 				clearInterval pullInterval
 
@@ -98,7 +96,7 @@ class Docker extends EventEmitter
 				resolve()
 
 	listImages: =>
-		images = await @dockerClient.listImages()
+		images = await @dockerode.listImages()
 		images = images.filter (image) ->
 			(image.RepoTags isnt null) and (image.RepoTags[0] isnt "<none>:<none>")
 
@@ -117,7 +115,7 @@ class Docker extends EventEmitter
 			@removeImage name: name
 
 	removeUntaggedImages: ->
-		images         = await @dockerClient.listImages()
+		images         = await @dockerode.listImages()
 		untaggedImages = filterUntaggedImages images
 
 		log.info "Found #{untaggedImages.length} untagged images"
@@ -128,7 +126,7 @@ class Docker extends EventEmitter
 				gentle: true
 
 	getImageByName: (name) ->
-		info = await @dockerClient.getImage(name).inspect()
+		info = await @dockerode.getImage(name).inspect()
 
 		id:          info.Id
 		name:        name
@@ -143,7 +141,7 @@ class Docker extends EventEmitter
 		log.info "Removing image #{@getShortenedImageId entity}"
 
 		try
-			await @dockerClient.getImage(entity).remove()
+			await @dockerode.getImage(entity).remove()
 			log.info "Removed image #{entity} successfully"
 		catch error
 			if error.statusCode is 409
@@ -153,7 +151,7 @@ class Docker extends EventEmitter
 				throw error
 
 	listContainers: =>
-		containers         = await @dockerClient.listContainers all: true
+		containers         = await @dockerode.listContainers all: true
 		containersDetailed = await Promise.all containers.map (container) =>
 			name = container.Names[0].replace "/", ""
 			[name, await @getContainerByName name]
@@ -167,7 +165,7 @@ class Docker extends EventEmitter
 
 	getContainerByName: (name) =>
 		try
-			container = await @dockerClient
+			container = await @dockerode
 				.getContainer name
 				.inspect size: 1
 
@@ -207,7 +205,7 @@ class Docker extends EventEmitter
 		debug "Creating container #{containerProps.name} ..."
 
 		try
-			await @dockerClient.createContainer containerProps
+			await @dockerode.createContainer containerProps
 
 			debug "Created container #{containerProps.name}"
 		catch error
@@ -221,14 +219,14 @@ class Docker extends EventEmitter
 	startContainer: (id) ->
 		debug "Starting container #{id} ..."
 
-		@dockerClient
+		@dockerode
 			.getContainer id
 			.start()
 
 	restartContainer: (id) ->
 		debug "Restarting container #{id} ..."
 
-		@dockerClient
+		@dockerode
 			.getContainer id
 			.restart()
 
@@ -236,7 +234,7 @@ class Docker extends EventEmitter
 		debug "Removing container #{id} ..."
 
 		try
-			await @dockerClient
+			await @dockerode
 				.getContainer id
 				.remove force: force
 		catch error
@@ -244,7 +242,7 @@ class Docker extends EventEmitter
 			throw error
 
 	getContainerLogs: (id) ->
-		container = @dockerClient.getContainer id
+		container = @dockerode.getContainer id
 		options   =
 			stdout: true
 			stderr: true
@@ -274,7 +272,7 @@ class Docker extends EventEmitter
 		return unless config.features.appVolume
 
 		try
-			volume = await @dockerClient.getVolume @getSharedVolumeName()
+			volume = await @dockerode.getVolume @getSharedVolumeName()
 			data   = await volume.inspect()
 
 			debug "Shared volume exists (internal: #{data.Name})"
@@ -282,13 +280,13 @@ class Docker extends EventEmitter
 			throw error unless error.statusCode is 404
 
 			debug "Creating shared volume ..."
-			await @dockerClient.createVolume Name: @getSharedVolumeName()
+			await @dockerode.createVolume Name: @getSharedVolumeName()
 
 	createVolumeIfNotExists: (name) ->
 		return unless config.features.appVolume
 
 		try
-			volume = await @dockerClient.getVolume @getVolumeName name
+			volume = await @dockerode.getVolume @getVolumeName name
 			data   = await volume.inspect()
 
 			debug "Volume exists for #{name} (internal: #{data.Name})"
@@ -296,6 +294,17 @@ class Docker extends EventEmitter
 			throw error unless error.statusCode is 404
 
 			debug "Creating volume for #{name} ..."
-			await @dockerClient.createVolume Name: @getVolumeName name
+			await @dockerode.createVolume Name: @getVolumeName name
+
+	verifyAuthentication: ->
+		try
+			await @dockerode.checkAuth config.docker.registryAuth.credentials
+			true
+		catch original
+			error          = new Error "Incorrect username or password"
+			error.code     = "ERR_AUTH_INCORRECT"
+			error.original = original
+
+			throw error
 
 module.exports = Docker
