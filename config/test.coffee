@@ -14,7 +14,10 @@ module.exports =
 			maxAttempts:    2
 			minWaitingTime: 1 * 100 # 0.5 second
 			maxWaitingTime: 1 * 100 # 0.5 second
+		registryAuth:
+			credentials: undefined
 
+	# @deprecated
 	groups:
 		fileLocation: path.resolve "meta", "groups.json"
 
