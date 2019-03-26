@@ -51,8 +51,8 @@ class AppUpdater
 
 		@state.sendNsState
 			updateState:
-				short: "Idle"
-				long:  "Idle"
+				type:    "idle"
+				message: "Idle"
 
 		if updatesCount
 			log.info kleur.cyan "#{updatesCount} application(s) to update/remove"
@@ -77,8 +77,9 @@ class AppUpdater
 
 		@state.sendNsState
 			updateState:
-				short: "Updating applications ..."
-				long:  message.join "\n"
+				type:        "update"
+				message:     "Updating applications ..."
+				description: message.join "\n"
 
 		try
 			# Verifying authentication does not work properly for GitLab registries
@@ -90,15 +91,16 @@ class AppUpdater
 
 			@state.sendNsState
 				updateState:
-					short: "Idle"
-					long:  "Idle"
+					type:    "idle"
+					message: "Idle"
 		catch error
 			log.error kleur.yellow "Failed to update: #{error.message}"
 
 			@state.sendNsState
 				updateState:
-					short: "ERROR"
-					long:  error.message
+					type:        "error"
+					message:     "Update failed"
+					description: error.message
 		finally
 			@state.throttledSendState()
 
@@ -165,7 +167,7 @@ class AppUpdater
 
 	normalizeAppConfiguration: (appConfiguration) ->
 		{ containerName, mounts } = appConfiguration
-		mounts                    = @addVolumes containerName, mounts if config.features.appVolume
+		mounts                    = @addVolumes containerName, mounts if appConfiguration.createVolumes
 
 		name:         containerName
 		AttachStdin:  not appConfiguration.detached
