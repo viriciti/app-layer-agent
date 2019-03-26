@@ -6,9 +6,6 @@ getEnv = (name, defaultValue) ->
 	defaultValue
 
 module.exports =
-	features:
-		appVolume: false
-
 	mqtt:
 		host:     getEnv "MQTT_ENDPOINT", "localhost"
 		port:     getEnv "MQTT_PORT",     1883
