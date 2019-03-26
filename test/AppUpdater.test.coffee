@@ -1,6 +1,6 @@
-assert                               = require "assert"
-{ random, identity, constant, take } = require "lodash"
-spy                                  = require "spy"
+assert                     = require "assert"
+{ random, constant, take } = require "lodash"
+spy                        = require "spy"
 
 AppUpdater   = require "../src/manager/AppUpdater"
 GroupManager = require "../src/manager/GroupManager"

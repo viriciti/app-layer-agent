@@ -5,7 +5,6 @@ config                                       = require "config"
 { every, isEmpty, random }                   = require "lodash"
 { filterUntaggedImages, getRemovableImages } = require "@viriciti/app-layer-logic"
 debug                                        = (require "debug") "app:Docker"
-kleur                                        = require "kleur"
 
 log              = (require "./Logger") "Docker"
 DockerLogsParser = require "./DockerLogsParser"
@@ -67,20 +66,14 @@ class Docker extends EventEmitter
 			# Unauthorized errors are rejected
 			# due to the lack of recovery
 			handleUnauthorized = (error) ->
-				message = "No permission to download #{name}"
-				log.error kleur.yellow message
-
-				error      = new Error message
+				error      = new Error "No permission to download #{name}"
 				error.code = "ERR_DOCKER_UNAUTHORIZED"
 				reject error
 
-			handleCorruptedLayer = (error) ->
-				[, source, target] = /(\/.+) (\/.+):/g.exec error.message
+			handleCorruptedLayer = (message) ->
+				[, source, target] = /(\/.+) (\/.+):/g.exec message
 
-				message = "Layer corrupted: #{source} → #{target}"
-				log.error kleur.red message
-
-				error        = new Error message
+				error        = new Error "Corrupted layer: #{source} → #{target}"
 				error.code   = "ERR_CORRUPTED_LAYER"
 				error.source = source
 				error.target = target
@@ -94,6 +87,8 @@ class Docker extends EventEmitter
 				interval: ->
 					retryIn
 				errorFilter: (error) ->
+					return handleCorruptedLayer error if error.match /failed to register layer/i
+
 					debug "Downloading #{name} failed, error code: #{error.statusCode}"
 					return false unless error.statusCode in config.docker.retry.errorCodes
 
@@ -107,9 +102,8 @@ class Docker extends EventEmitter
 
 				@dockerode.pull name, options, (error, stream) =>
 					if error
-						handleUnauthorized   error if error.message.match /unauthorized/i
-						handleCorruptedLayer error if error.message.match /failed to register layer/i
-						handleGenericError   error unless error.statusCode in config.docker.retry.errorCodes
+						handleUnauthorized error if error.message.match /unauthorized/i
+						handleGenericError error unless error.statusCode in config.docker.retry.errorCodes
 						return next error
 
 					@dockerode.modem.followProgress stream, next
@@ -290,7 +284,7 @@ class Docker extends EventEmitter
 		"app-layer-agent-#{name}"
 
 	getSharedVolumeName: ->
-		"app-layer-agent-@shared"
+		"shared-app-layer-agent"
 
 	createSharedVolume: (name) ->
 		try

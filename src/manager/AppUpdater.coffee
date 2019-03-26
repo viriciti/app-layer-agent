@@ -95,10 +95,16 @@ class AppUpdater
 		catch error
 			log.error kleur.yellow "Failed to update: #{error.message}"
 
-			@state.sendNsState
-				updateState:
-					short: "ERROR"
-					long:  error.message
+			if error.code is "ERR_CORRUPTED_LAYER"
+				@state.sendNsState
+					updateState:
+						short: "ERROR: Layer corrupted"
+						long:  error.message
+			else
+				@state.sendNsState
+					updateState:
+						short: "ERROR"
+						long:  error.message
 		finally
 			@state.throttledSendState()
 
@@ -165,7 +171,7 @@ class AppUpdater
 
 	normalizeAppConfiguration: (appConfiguration) ->
 		{ containerName, mounts } = appConfiguration
-		mounts                    = @addVolumes containerName, mounts if config.features.appVolume
+		mounts                    = @addVolumes containerName, mounts if appConfiguration.createVolumes
 
 		name:         containerName
 		AttachStdin:  not appConfiguration.detached
