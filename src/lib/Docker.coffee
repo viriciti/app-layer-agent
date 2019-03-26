@@ -75,7 +75,7 @@ class Docker extends EventEmitter
 				reject error
 
 			handleCorruptedLayer = (error) ->
-				[, source, target] = /\/(.+) \/(.+):/g.exec error.message
+				[, source, target] = /(\/.+) (\/.+):/g.exec error.message
 
 				message = "Layer corrupted: #{source} → #{target}"
 				log.error kleur.red message
@@ -86,7 +86,8 @@ class Docker extends EventEmitter
 				error.target = target
 				reject error
 
-			handleGenericError = ->
+			handleGenericError = (error) ->
+				log.error "Error while downloading #{name}: #{error.message}"
 
 			async.retry
 				times: config.docker.retry.maxAttempts
@@ -108,7 +109,7 @@ class Docker extends EventEmitter
 					if error
 						handleUnauthorized   error if error.message.match /unauthorized/i
 						handleCorruptedLayer error if error.message.match /failed to register layer/i
-						handleGenericError   error unless error.statusCode in config.docker.registry.errorCodes
+						handleGenericError   error unless error.statusCode in config.docker.retry.errorCodes
 						return next error
 
 					@dockerode.modem.followProgress stream, next
@@ -289,7 +290,7 @@ class Docker extends EventEmitter
 		"app-layer-agent-#{name}"
 
 	getSharedVolumeName: ->
-		"shared-app-layer-agent"
+		"app-layer-agent-@shared"
 
 	createSharedVolume: (name) ->
 		return unless config.features.appVolume
