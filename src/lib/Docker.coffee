@@ -87,7 +87,7 @@ class Docker extends EventEmitter
 				interval: ->
 					retryIn
 				errorFilter: (error) ->
-					return handleCorruptedLayer error if error.match /failed to register layer/i
+					return handleCorruptedLayer error if error.message.match /failed to register layer/i
 
 					debug "Downloading #{name} failed, error code: #{error.statusCode}"
 					return false unless error.statusCode in config.docker.retry.errorCodes

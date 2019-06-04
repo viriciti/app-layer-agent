@@ -240,3 +240,50 @@ describe ".AppUpdater", ->
 				RestartPolicy:
 					Name: "always"
 				PortBindings: {}
+
+	it "should not create volumes if they are not configured", ->
+		docker      = new Docker
+		updater     = new AppUpdater docker
+		appConfig   = updater.normalizeAppConfiguration
+			applicationName: testContainerName
+			containerName:   testContainerName
+			detached:        true
+			environment:     []
+			fromImage:       "hello-world"
+			mounts:          []
+			networkMode:     "host"
+			privileged:      false
+			restartPolicy:   "always"
+			version:         "^1.0.0"
+			labels:
+				"com.viriciti.applayer.agent": true
+				"com.viriciti.applayer.group": "manual"
+
+		assert.equal appConfig.HostConfig.Binds.length, 0
+
+	it "should create volumes if they are configured", ->
+		docker      = new Docker
+		updater     = new AppUpdater docker
+		appConfig   = updater.normalizeAppConfiguration
+			createVolumes:   true #
+			applicationName: testContainerName
+			containerName:   testContainerName
+			detached:        true
+			environment:     []
+			fromImage:       "hello-world"
+			mounts:          []
+			networkMode:     "host"
+			privileged:      false
+			restartPolicy:   "always"
+			version:         "^1.0.0"
+			labels:
+				"com.viriciti.applayer.agent": true
+				"com.viriciti.applayer.group": "manual"
+
+		regexInBinds = (regex) ->
+			appConfig.HostConfig.Binds.some (bind) ->
+				regex.test bind
+
+		assert.ok appConfig.HostConfig.Binds.length >= 2
+		assert.ok regexInBinds /\/data/
+		assert.ok regexInBinds /\/share/

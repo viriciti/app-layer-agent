@@ -123,7 +123,7 @@ describe ".Docker", ->
 
 		assert.rejects ->
 			docker.pullImage "hello-world"
-		, /layer corrupted/i
+		, /corrupted layer/i
 
 	it "should be able to return a shortened image id", ->
 		docker    = new Docker
