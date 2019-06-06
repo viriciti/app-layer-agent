@@ -81,6 +81,8 @@ class AppUpdater
 				long:  message.join "\n"
 
 		try
+			# Verifying authentication does not work properly for GitLab registries
+			# await @docker.verifyAuthentication() if @docker.isAuthenticationEnabled()
 			await @docker.removeUntaggedImages()
 			await @removeApps  appsToChange.remove
 			await @installApps appsToChange.install
@@ -93,10 +95,16 @@ class AppUpdater
 		catch error
 			log.error kleur.yellow "Failed to update: #{error.message}"
 
-			@state.sendNsState
-				updateState:
-					short: "ERROR"
-					long:  error.message
+			if error.code is "ERR_CORRUPTED_LAYER"
+				@state.sendNsState
+					updateState:
+						short: "ERROR: Layer corrupted"
+						long:  error.message
+			else
+				@state.sendNsState
+					updateState:
+						short: "ERROR"
+						long:  error.message
 		finally
 			@state.throttledSendState()
 
@@ -140,7 +148,7 @@ class AppUpdater
 
 		currentStep > endStep
 
-	appendAppVolume: (name, mounts = []) ->
+	addVolumes: (name, mounts = []) ->
 		mountsToAppend = [
 			source:      @docker.getVolumeName name
 			destination: "/data"
@@ -163,22 +171,25 @@ class AppUpdater
 
 	normalizeAppConfiguration: (appConfiguration) ->
 		{ containerName, mounts } = appConfiguration
-		mounts                    = @appendAppVolume containerName, mounts if config.features.appVolume
+		mounts                    = @addVolumes containerName, mounts if appConfiguration.createVolumes
 
 		name:         containerName
 		AttachStdin:  not appConfiguration.detached
 		AttachStdout: not appConfiguration.detached
 		AttachStderr: not appConfiguration.detached
-		Env:          appConfiguration.environment
-		Cmd:          appConfiguration.entryCommand
 		Image:        appConfiguration.fromImage
 		Labels:       appConfiguration.labels #NOTE https://docs.docker.com/config/labels-custom-metadata/#value-guidelines
+		Env: [
+			...appConfiguration.environment
+			"APP_LAYER_PRIVILEGED=#{appConfiguration.privileged}"
+			"APP_LAYER_DETACHED=#{appConfiguration.detached}"
+		]
 		HostConfig:
 			Binds:         mounts
 			NetworkMode:   appConfiguration.networkMode
 			Privileged:    not not appConfiguration.privileged
 			RestartPolicy: Name: appConfiguration.restartPolicy
-			PortBindings:  appConfiguration.ports
+			PortBindings:  appConfiguration.ports or {}
 
 	# unused for now
 	bindsToMounts: (binds) ->

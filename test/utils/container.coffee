@@ -26,7 +26,7 @@ createTestContainer = (options) ->
 	, options
 
 	if options.useNative
-		await docker.dockerClient.createContainer
+		await docker.dockerode.createContainer
 			name:  name
 			Image: "hello-world"
 	else
@@ -34,7 +34,7 @@ createTestContainer = (options) ->
 			name:  name
 			Image: "hello-world"
 
-	container        = docker.dockerClient.getContainer name
+	container        = docker.dockerode.getContainer name
 	containers[name] = container
 
 	if options.autoStart

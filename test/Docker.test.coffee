@@ -1,8 +1,8 @@
-{ random, take, isArray, isPlainObject }     = require "lodash"
-assert                                       = require "assert"
-config                                       = require "config"
-spy                                          = require "spy"
-{ filterUntaggedImages, getRemovableImages } = require "@viriciti/app-layer-logic"
+{ random, take, isArray, isPlainObject, clone } = require "lodash"
+assert                                          = require "assert"
+config                                          = require "config"
+spy                                             = require "spy"
+{ filterUntaggedImages, getRemovableImages }    = require "@viriciti/app-layer-logic"
 
 Docker                                           = require "../src/lib/Docker"
 { createTestContainer, removeAllTestContainers } = require "./utils/container"
@@ -11,16 +11,32 @@ delay                                            = require "./utils/delay"
 mockDockerPull = (docker, returnStatusCode = 200) ->
 	throw new Error "Invalid Docker client" unless docker instanceof Docker
 
-	docker
-		.dockerClient
-		.pull = (name, options, cb) ->
-			setTimeout ->
-				error            = new Error
-				error.statusCode = returnStatusCode
-				error.json       = {}
+	docker.dockerode.pull = (name, options, cb) ->
+		setTimeout ->
+			error            = new Error
+			error.statusCode = returnStatusCode
+			error.json       = {}
 
-				cb error
-			, random 100, 500
+			cb error
+		, random 100, 500
+
+	docker
+
+mockCorruptedLayer = (docker) ->
+	throw new Error "Invalid Docker client" unless docker instanceof Docker
+
+	docker.dockerode.pull = (name, options, cb) ->
+		layer = [
+			"failed to register layer: rename"
+			"/var/lib/docker/image/overlay/layerdb/tmp/layer-123"
+			"/var/lib/docker/image/overlay/layerdb/sha256/abc:"
+			"directory not empty"
+		]
+		message    = layer.join " "
+		error      = new Error message
+		error.code = "ERR_CORRUPTED_LAYER"
+
+		cb error
 
 	docker
 
@@ -101,9 +117,16 @@ describe ".Docker", ->
 
 			assert.equal error.statusCode, 502
 
+	it "should treat corrupted layer as an error", ->
+		docker = new Docker
+		docker = mockCorruptedLayer docker
+
+		assert.rejects ->
+			docker.pullImage "hello-world"
+		, /corrupted layer/i
+
 	it "should be able to return a shortened image id", ->
 		docker    = new Docker
-
 		hash      = "sha256:87f1a6e84e0012a52c1a176619256c3f0222591b78a266188f9fc983a383b64a"
 		shortened = docker.getShortenedImageId hash
 		assert.equal shortened, "87f1a6e84e00"
@@ -142,6 +165,24 @@ describe ".Docker", ->
 
 			docker.listContainers()
 
+	it.skip "should check for authentication", ->
+		docker = new Docker
+
+		credentials = clone config.docker.registryAuth.credentials
+		invalid     = { ...credentials, username: "this-does-not-exist", password: "*****" }
+
+		config.docker.registryAuth.credentials = invalid
+		assert.rejects ->
+			docker.verifyAuthentication()
+		, /incorrect username or password/i
+
+		config.docker.registryAuth.credentials = credentials
+		assert.doesNotReject ->
+			docker.verifyAuthentication()
+		,
+			/incorrect username or password/i
+			"Did you configure GitLab (Docker) credentials?"
+
 	it "should be able to pull an image", ->
 		@timeout 10000
 
@@ -159,7 +200,7 @@ describe ".Docker", ->
 
 		await delay 1000
 		await docker
-			.dockerClient
+			.dockerode
 			.getContainer "test-container"
 			.remove force: true
 
