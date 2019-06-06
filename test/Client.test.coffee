@@ -108,8 +108,8 @@ describe ".Client", ->
 		client.connect()
 
 		forked     = client.fork()
-		expected   = ["packetreceive", "error", "reconnect", "offline"]
-		nameInList = (name) -> name in Object.keys forked._client._events
+		expected   = ["packetreceive", "reconnect", "offline"]
+		nameInList = (name) -> name in Object.keys client.mqtt._client._events
 
 		forked
 			.once "connect", ->

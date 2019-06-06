@@ -1,6 +1,5 @@
 { throttle, isString, isEqual, isPlainObject, map } = require "lodash"
 config                                              = require "config"
-{ promisify }                                       = require "util"
 
 pkg            = require "../../package.json"
 getIpAddresses = require "../helpers/getIPAddresses"
@@ -27,7 +26,7 @@ class StateManager
 			.join "/"
 			.replace /\/{2,}/, "/"
 
-		promisify(@socket.publish.bind @socket) topic, message, options.opts
+		@socket.publish topic, message, options.opts
 
 	sendStateToMqtt: =>
 		state       = await @generateStateObject()
@@ -47,7 +46,7 @@ class StateManager
 	sendAppStateToMqtt: =>
 		@publish
 			topic:   "nsState/containers"
-			message: await promisify(@docker.listContainers.bind @docker)()
+			message: await @docker.listContainers()
 
 	sendSystemStateToMqtt: =>
 		systemInfo = await @docker.getDockerInfo()

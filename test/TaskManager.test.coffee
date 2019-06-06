@@ -1,9 +1,9 @@
-RPC                              = require "mqtt-json-rpc"
-assert                           = require "assert"
-config                           = require "config"
-mosca                            = require "mosca"
-mqtt                             = require "mqtt"
-{ random, first, isPlainObject } = require "lodash"
+RPC                                    = require "mqtt-json-rpc"
+assert                                 = require "assert"
+config                                 = require "config"
+mosca                                  = require "mosca"
+mqtt                                   = require "mqtt"
+{ random, first, isPlainObject, noop } = require "lodash"
 
 registerFunction = require "../src/helpers/registerFunction"
 
@@ -69,6 +69,8 @@ describe ".TaskManager", ->
 			fn:     thenable()
 			name:   "hello-world"
 			params: ["b"]
+
+		noop
 
 	it "should sort tasks in the order of arrival", ->
 		manager     = new TaskManager client
@@ -137,6 +139,7 @@ describe ".TaskManager", ->
 			fn:     thenable 100
 			name:   "hello-world"
 			params: ["a"]
+		noop
 
 	it "should add an error status if a task fails", (done) ->
 		manager    = new TaskManager client
@@ -156,3 +159,4 @@ describe ".TaskManager", ->
 			fn:     -> Promise.reject error
 			name:   "hello-world"
 			params: ["a"]
+		noop

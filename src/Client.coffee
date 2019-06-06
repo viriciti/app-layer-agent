@@ -21,7 +21,7 @@ class Client extends EventEmitter
 		@subscribedTopics = []
 
 	isTLSEnabled: ->
-		every @options.tls
+		@options.tls and every @options.tls
 
 	constructURL: ->
 		protocol = "mqtt"
