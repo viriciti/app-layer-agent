@@ -179,11 +179,7 @@ class AppUpdater
 		AttachStderr: not appConfiguration.detached
 		Image:        appConfiguration.fromImage
 		Labels:       appConfiguration.labels #NOTE https://docs.docker.com/config/labels-custom-metadata/#value-guidelines
-		Env: [
-			...appConfiguration.environment
-			"APP_LAYER_PRIVILEGED=#{appConfiguration.privileged}"
-			"APP_LAYER_DETACHED=#{appConfiguration.detached}"
-		]
+		Env:          appConfiguration.environment
 		HostConfig:
 			Binds:         mounts
 			NetworkMode:   appConfiguration.networkMode
