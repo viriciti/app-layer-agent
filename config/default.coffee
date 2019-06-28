@@ -37,7 +37,7 @@ module.exports =
 			minWaitingTime: 5 * 1000 * 60  # 5 minutes
 			maxWaitingTime: 15 * 1000 * 60 # 15 minutes
 			maxAttempts:    10
-			errorCodes:     [502, 503, 504]
+			errorCodes:     [500, 502, 503, 504]
 		registryAuth:
 			credentials:
 				username:      getEnv "GITLAB_USERNAME",     process.env.GITLAB_USER_NAME
