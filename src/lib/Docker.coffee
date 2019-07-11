@@ -102,7 +102,7 @@ class Docker extends EventEmitter
 
 				@dockerode.pull name, options, (error, stream) =>
 					if error
-						handleUnauthorized error if error.message.match /unauthorized/i
+						handleUnauthorized error if error.message?.match /unauthorized/i
 						handleGenericError error unless error.statusCode in config.docker.retry.errorCodes
 						return next error
 
