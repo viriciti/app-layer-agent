@@ -1,8 +1,9 @@
-{ throttle, isString, isEqual, isPlainObject, map } = require "lodash"
-config                                              = require "config"
+{ throttle, isString, isEqual, isPlainObject, map, defaultTo } = require "lodash"
+config                                                         = require "config"
 
 pkg            = require "../../package.json"
-getIpAddresses = require "../helpers/getIPAddresses"
+getIPAddresses = require "../helpers/getIPAddresses"
+getOSVersion   = require "../datahub/getOSVersion"
 log            = (require "../lib/Logger") "StateManager"
 
 class StateManager
@@ -50,7 +51,7 @@ class StateManager
 
 	sendSystemStateToMqtt: =>
 		systemInfo = await @docker.getDockerInfo()
-		addresses  = getIpAddresses()
+		addresses  = getIPAddresses()
 		appVersion = pkg.version
 
 		@publish
@@ -95,8 +96,9 @@ class StateManager
 
 		systemInfo = Object.assign {},
 			systemInfo
-			getIpAddresses()
+			getIPAddresses()
 			appVersion: pkg.version
+			osVersion:  defaultTo getOSVersion(), "n/a"
 
 		Object.assign {},
 			{ systemInfo }
