@@ -1,4 +1,5 @@
-fs = require "fs"
+fs     = require "fs"
+semver = require "semver"
 
 readVersion = (target) ->
 	try
@@ -7,6 +8,7 @@ readVersion = (target) ->
 
 		version = fs.readFileSync target, "utf-8"
 		version = version.trim()
+		return version   if semver.valid version
 		return undefined unless version.includes "DATAHUB_VERSION"
 
 		version = version
