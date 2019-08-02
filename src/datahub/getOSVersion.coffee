@@ -27,6 +27,6 @@ readVersion = (target) ->
 
 module.exports = ->
     version   = readVersion "/version"
-    version or= readVersion "/usr/lib/os-release"
+    version or= readVersion "/etc/os-release"
 
     version
