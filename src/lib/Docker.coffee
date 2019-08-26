@@ -253,6 +253,13 @@ class Docker extends EventEmitter
 			.getContainer id
 			.restart()
 
+	stopContainer: (id) ->
+		debug "Stopping container #{id} ..."
+
+		@dockerode
+			.getContainer id
+			.stop()
+
 	removeContainer: ({ id, force = false }) ->
 		debug "Removing container #{id} ..."
 

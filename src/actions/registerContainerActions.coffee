@@ -7,6 +7,14 @@ module.exports = ({ taskManager, docker }) ->
 		debug "Removing container '#{id}'"
 		await docker.removeContainer { id, force }
 
+	onStartContainer = ({ id }) ->
+		debug "Starting container '#{id}'"
+		await docker.startContainer id
+
+	onStopContainer = ({ id }) ->
+		debug "Stopping container '#{id}'"
+		await docker.stopContainer id
+
 	onRestartContainer = ({ id }) ->
 		debug "Restarting container '#{id}'"
 		await docker.restartContainer id
@@ -18,6 +26,16 @@ module.exports = ({ taskManager, docker }) ->
 	registerFunction
 		fn:          onRemoveContainer
 		name:        "removeContainer"
+		taskManager: taskManager
+
+	registerFunction
+		fn:          onStartContainer
+		name:        "startContainer"
+		taskManager: taskManager
+
+	registerFunction
+		fn:          onStopContainer
+		name:        "stopContainer"
 		taskManager: taskManager
 
 	registerFunction
