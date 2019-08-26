@@ -5,7 +5,8 @@ debug                                                    = (require "debug") "ap
 { isEmpty, pickBy, first, debounce, map, omit, partial } = require "lodash"
 kleur                                                    = require "kleur"
 
-log = (require "../lib/Logger") "AppUpdater"
+log               = (require "../lib/Logger") "AppUpdater"
+removeRecursively = require "../lib/removeRecursively"
 
 class AppUpdater
 	constructor: (@docker, @state, @groupManager) ->
@@ -125,7 +126,16 @@ class AppUpdater
 		{ name, Image } = normalized
 
 		return if @isPastLastInstallStep "Pull", appConfig.lastInstallStep
-		await @docker.pullImage name: Image
+
+		try
+			await @docker.pullImage name: Image
+		catch error
+			throw error unless error.code is "ERR_CORRUPTED_LAYER"
+
+			if config.docker.retry.removeCorruptedLayer
+				log.warn "Corrupted layer (#{Image}), removing and continuing ..."
+				await removeRecursively error.target
+				await @docker.pullImage name: Image
 
 		return if @isPastLastInstallStep "Clean", appConfig.lastInstallStep
 		await @docker.removeContainer id: name, force: true
