@@ -2,7 +2,7 @@ Dockerode                                    = require "dockerode"
 async                                        = require "async"
 config                                       = require "config"
 { EventEmitter }                             = require "events"
-{ every, isEmpty, random }                   = require "lodash"
+{ every, isEmpty, random, find }             = require "lodash"
 { filterUntaggedImages, getRemovableImages } = require "@viriciti/app-layer-logic"
 debug                                        = (require "debug") "app:Docker"
 
@@ -50,7 +50,9 @@ class Docker extends EventEmitter
 		version:    info.Version
 		kernel:     info.KernelVersion
 
-	pullImage: ({ name }) =>
+	pullImage: ({ name }, force = false) =>
+		return log.warn "Skipping #{name}, image is already downloaded" if find await @listImages(), name: name
+
 		log.info "Downloading #{name} (retrying on status codes #{config.docker.retry.errorCodes.join ', '})..."
 
 		new Promise (resolve, reject) =>
