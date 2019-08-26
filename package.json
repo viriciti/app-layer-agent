@@ -39,7 +39,7 @@
     "kleur": "3.0.1",
     "lodash": "4.17.11",
     "mqtt": "2.18.8",
-    "mqtt-json-rpc": "0.9.20",
+    "mqtt-json-rpc": "1.1.0",
     "mqtt-pattern": "1.2.0",
     "p-queue": "3.1.0",
     "rxjs": "5.5.12",
