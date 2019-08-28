@@ -1,6 +1,6 @@
 {
   "name": "app-layer-agent",
-  "version": "1.24.2",
+  "version": "1.25.0",
   "scripts": {
     "start": "NODE_ENV=development USE_DOCKER=true nodemon src/main.coffee",
     "test": "NODE_ENV=test nyc mocha",

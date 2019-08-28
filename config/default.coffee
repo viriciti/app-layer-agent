@@ -34,10 +34,11 @@ module.exports =
 			allowRemoval: true
 			whitelist:    ["app-layer-agent", "device-manager"]
 		retry:
-			minWaitingTime: 5 * 1000 * 60  # 5 minutes
-			maxWaitingTime: 15 * 1000 * 60 # 15 minutes
-			maxAttempts:    10
-			errorCodes:     [500, 502, 503, 504]
+			minWaitingTime:       5 * 1000 * 60  # 5 minutes
+			maxWaitingTime:       15 * 1000 * 60 # 15 minutes
+			maxAttempts:          10
+			errorCodes:           [500, 502, 503, 504]
+			removeCorruptedLayer: true
 		registryAuth:
 			credentials:
 				username:      getEnv "GITLAB_USERNAME",     process.env.GITLAB_USER_NAME
