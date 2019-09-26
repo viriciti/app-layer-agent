@@ -69,6 +69,14 @@ class Client extends EventEmitter
 		@emit "connect"
 
 	onError: (error) ->
+		if error.message?.match /certificate is not yet valid/
+			log.error "Host date not valid yet, restarting self ..."
+			process.exit 1
+
+		if error.message?.match /EAI_AGAIN/
+			log.error "Host DNS failure, restarting self ..."
+			process.exit 1
+
 		log.error kleur.red error.message
 
 	onPacket: (packet) =>
