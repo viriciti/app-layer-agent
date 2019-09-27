@@ -17,6 +17,7 @@ class Docker extends EventEmitter
 		log.warn "Authentication is disabled"    unless @isAuthenticationEnabled()
 
 		@dockerode = new Dockerode socketPath: config.docker.socketPath
+		@tracker   = {}
 		@listenForEvents()
 
 	isAuthenticationEnabled: ->
@@ -56,6 +57,13 @@ class Docker extends EventEmitter
 		log.info "Downloading #{name} (retrying on status codes #{config.docker.retry.errorCodes.join ', '})..."
 
 		new Promise (resolve, reject) =>
+			taglessName = @tagless name
+			tracker     = @tracker[taglessName]
+
+			if tracker?
+				log.warn "Stopping current download attempt, then downloading latest (#{taglessName})"
+				tracker.destroy()
+
 			retryIn       = 1000 * 60
 			pullInterval  = setInterval =>
 				@emit "logs",
@@ -111,9 +119,12 @@ class Docker extends EventEmitter
 						handleGenericError error unless error.statusCode in config.docker.retry.errorCodes
 						return next error
 
+					@tracker[taglessName] = stream
 					@dockerode.modem.followProgress stream, next
 			, (error) ->
 				clearInterval pullInterval
+
+				delete @tracker[taglessName]
 
 				return reject error if error
 				resolve()
@@ -333,5 +344,11 @@ class Docker extends EventEmitter
 			error.original = original
 
 			throw error
+
+	tagless: (name) ->
+		index = name.lastIndexOf ":"
+		return name if index is -1
+
+		name.substring 0, index
 
 module.exports = Docker
