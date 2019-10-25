@@ -7,6 +7,7 @@ kleur                                                    = require "kleur"
 
 log               = (require "../lib/Logger") "AppUpdater"
 removeRecursively = require "../lib/removeRecursively"
+firstKey          = require "../helpers/firstKey"
 
 class AppUpdater
 	constructor: (@docker, @state, @groupManager) ->
@@ -33,16 +34,24 @@ class AppUpdater
 		catch error
 			log.error "Failed to update: #{error.message or error}"
 
+	rearrange: (source) ->
+		return source if firstKey(source) is "default"
+
+		copy = omit source, "default"
+		copy = Object.assign {}, default: source.default or {}, copy
+
+		copy
+
 	doUpdate: (globalGroups, groups) =>
 		debug "Global groups are", globalGroups
 		debug "Device groups are", groups
 
 		throw new Error "No global groups"                if isEmpty globalGroups
 		throw new Error "No default group"                unless globalGroups["default"]
-		throw new Error "Default group must appear first" unless first(Object.keys globalGroups) is "default"
 
 		log.info "Calculating updates ..."
 
+		groups         = @rearrange groups unless first(Object.keys globalGroups) is "default"
 		currentApps    = await @docker.listContainers()
 		currentApps    = {} unless config.docker.container.allowRemoval
 		currentApps    = omit currentApps, config.docker.container.whitelist
