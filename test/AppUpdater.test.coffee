@@ -1,6 +1,6 @@
-assert                     = require "assert"
-{ random, constant, take } = require "lodash"
-spy                        = require "spy"
+assert                            = require "assert"
+{ random, constant, take, first } = require "lodash"
+spy                               = require "spy"
 
 AppUpdater   = require "../src/manager/AppUpdater"
 GroupManager = require "../src/manager/GroupManager"
@@ -58,16 +58,17 @@ describe ".AppUpdater", ->
 		catch error
 			assert.ok error.message.match /no default group/i
 
-	it "should error if default group is not the first group", ->
+	it.only "should be able to rearrange groups", ->
+		firstKey     = (object) -> first Object.keys object
 		updater      = new AppUpdater
 		groups       =
 			name:    groups.name
-			default: groups["default"]
+			# default: groups["default"]
 
-		try
-			await updater.queueUpdate groups, []
-		catch error
-			assert.ok error.message.match /default group must appear first/i
+		assert.notEqual firstKey(groups), "default"
+
+		rearranged = updater.rearrange groups
+		assert.equal firstKey(rearranged), "default"
 
 	it "should be able to convert binds to mounts", ->
 		updater = new AppUpdater
