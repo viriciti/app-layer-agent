@@ -1,9 +1,23 @@
-Queue                                                    = require "p-queue"
-config                                                   = require "config"
-debug                                                    = (require "debug") "app:AppUpdater"
-{ createGroupsMixin, getAppsToChange }                   = require "@viriciti/app-layer-logic"
-{ isEmpty, pickBy, first, debounce, map, omit, partial } = require "lodash"
-kleur                                                    = require "kleur"
+config = require "config"
+debug  = (require "debug") "app:AppUpdater"
+kleur  = require "kleur"
+Queue  = require "p-queue"
+{
+	createGroupsMixin,
+	getAppsToChange
+}  = require "@viriciti/app-layer-logic"
+{
+	isEmpty,
+	pickBy,
+	first,
+	debounce,
+	each,
+	map,
+	omit,
+	partial,
+	keys,
+	reduce
+} = require "lodash"
 
 log               = (require "../lib/Logger") "AppUpdater"
 removeRecursively = require "../lib/removeRecursively"
@@ -42,6 +56,23 @@ class AppUpdater
 
 		copy
 
+	accountForNotRunning: (currentApps) ->
+		appsToDelete = reduce currentApps, (m, container, name) ->
+			id              = container.Id
+			isRunning       = container.state?.running
+			isAlwaysRestart = container.restartPolicy?.type is "always"
+			if not isRunning and isAlwaysRestart
+				log.warn "App `#{name}` with restart policy `always` is not running. Scheduled for removal and recreation.."
+				m.push { name, id }
+			m
+		, []
+
+		for container in appsToDelete
+			log.warn "Removing app `#{container.name}`"
+			await @docker.removeContainer container.id, true
+
+		omit currentApps, map appsToDelete, "name"
+
 	doUpdate: (globalGroups, groups) =>
 		debug "Global groups are", globalGroups
 		debug "Device groups are", groups
@@ -55,6 +86,7 @@ class AppUpdater
 		currentApps    = await @docker.listContainers()
 		currentApps    = {} unless config.docker.container.allowRemoval
 		currentApps    = omit currentApps, config.docker.container.whitelist
+		currentApps    = @accountForNotRunning currentApps
 		extendedGroups = createGroupsMixin globalGroups,   groups
 		appsToChange   = getAppsToChange   extendedGroups, currentApps
 		updatesCount   = appsToChange.install.length + appsToChange.remove.length
