@@ -67,10 +67,12 @@ class AppUpdater
 			m
 		, []
 
-		for container in appsToDelete
-			log.warn "Removing app `#{container.name}`"
-			await @docker.removeContainer container.id, true
+		if appsToDelete.length
+			log.warn "Apps not running: #{(map appsToDelete, "name").join ", "}"
+		else
+			log.info "No apps found in wrong state"
 
+		await @removeApps map appsToDelete, "id"
 		omit currentApps, map appsToDelete, "name"
 
 	doUpdate: (globalGroups, groups) =>
@@ -112,10 +114,10 @@ class AppUpdater
 			log.warn "No applications to install"
 
 		if appsToChange.remove.length
-			message.push "Removing: #{install}"
-			log.info "Removing application(s): #{remove}"
+			message.push "Removing: #{remove}"
+			log.warn "Removing application(s): #{remove}"
 		else
-			log.warn "No applications to remove"
+			log.info "No applications to remove"
 
 		@state.sendNsState
 			updateState:
