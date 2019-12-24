@@ -64,7 +64,7 @@ class Agent
 
 		@queueUpdateInterval = setInterval =>
 			@appUpdater.queueUpdate()
-		,
+		, config.queueUpdateInterval
 
 	onClose: =>
 		log.warn "Connection closed"
