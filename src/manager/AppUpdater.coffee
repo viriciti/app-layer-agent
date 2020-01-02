@@ -88,7 +88,8 @@ class AppUpdater
 		currentApps    = await @docker.listContainers()
 		currentApps    = {} unless config.docker.container.allowRemoval
 		currentApps    = omit currentApps, config.docker.container.whitelist
-		currentApps    = @accountForNotRunning currentApps
+		currentApps    = await @accountForNotRunning currentApps
+
 		extendedGroups = createGroupsMixin globalGroups,   groups
 		appsToChange   = getAppsToChange   extendedGroups, currentApps
 		updatesCount   = appsToChange.install.length + appsToChange.remove.length
