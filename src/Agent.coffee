@@ -62,6 +62,10 @@ class Agent
 
 		@state.notifyOnlineStatus()
 
+		@queueUpdateInterval = setInterval =>
+			@appUpdater.queueUpdate()
+		, config.queueUpdateInterval
+
 	onClose: =>
 		log.warn "Connection closed"
 
@@ -75,6 +79,8 @@ class Agent
 		@client
 			.removeListener "devices/{id}/groups",  @onGroups
 			.removeListener "global/collections/+", @onCollection
+
+		clearInterval @queueUpdateInterval
 
 	onGroups: (topic, payload) =>
 		debug "Groups updated. Queue update: #{if @isUpdatableOnGroups then "yes" else "no"}"

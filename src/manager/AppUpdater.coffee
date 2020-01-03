@@ -1,9 +1,23 @@
-Queue                                                    = require "p-queue"
-config                                                   = require "config"
-debug                                                    = (require "debug") "app:AppUpdater"
-{ createGroupsMixin, getAppsToChange }                   = require "@viriciti/app-layer-logic"
-{ isEmpty, pickBy, first, debounce, map, omit, partial } = require "lodash"
-kleur                                                    = require "kleur"
+config = require "config"
+debug  = (require "debug") "app:AppUpdater"
+kleur  = require "kleur"
+Queue  = require "p-queue"
+{
+	createGroupsMixin,
+	getAppsToChange
+}  = require "@viriciti/app-layer-logic"
+{
+	isEmpty,
+	pickBy,
+	first,
+	debounce,
+	each,
+	map,
+	omit,
+	partial,
+	keys,
+	reduce
+} = require "lodash"
 
 log               = (require "../lib/Logger") "AppUpdater"
 removeRecursively = require "../lib/removeRecursively"
@@ -42,6 +56,25 @@ class AppUpdater
 
 		copy
 
+	accountForNotRunning: (currentApps) ->
+		appsToDelete = reduce currentApps, (m, container, name) ->
+			id              = container.Id
+			isRunning       = container.state?.running
+			isAlwaysRestart = container.restartPolicy?.type is "always"
+			if not isRunning and isAlwaysRestart
+				log.warn "App `#{name}` with restart policy `always` is not running. Scheduled for removal and recreation.."
+				m.push { name, id }
+			m
+		, []
+
+		if appsToDelete.length
+			log.warn "Apps not running: #{(map appsToDelete, "name").join ", "}"
+		else
+			log.info "No apps found in wrong state"
+
+		await @removeApps map appsToDelete, "id"
+		omit currentApps, map appsToDelete, "name"
+
 	doUpdate: (globalGroups, groups) =>
 		debug "Global groups are", globalGroups
 		debug "Device groups are", groups
@@ -55,6 +88,8 @@ class AppUpdater
 		currentApps    = await @docker.listContainers()
 		currentApps    = {} unless config.docker.container.allowRemoval
 		currentApps    = omit currentApps, config.docker.container.whitelist
+		currentApps    = await @accountForNotRunning currentApps
+
 		extendedGroups = createGroupsMixin globalGroups,   groups
 		appsToChange   = getAppsToChange   extendedGroups, currentApps
 		updatesCount   = appsToChange.install.length + appsToChange.remove.length
@@ -80,10 +115,10 @@ class AppUpdater
 			log.warn "No applications to install"
 
 		if appsToChange.remove.length
-			message.push "Removing: #{install}"
-			log.info "Removing application(s): #{remove}"
+			message.push "Removing: #{remove}"
+			log.warn "Removing application(s): #{remove}"
 		else
-			log.warn "No applications to remove"
+			log.info "No applications to remove"
 
 		@state.sendNsState
 			updateState:
