@@ -6,6 +6,8 @@ getEnv = (name, defaultValue) ->
 	defaultValue
 
 module.exports =
+	queueUpdateInterval: 10 * 1000
+
 	mqtt:
 		host:     getEnv "MQTT_ENDPOINT", "localhost"
 		port:     getEnv "MQTT_PORT",     1883
