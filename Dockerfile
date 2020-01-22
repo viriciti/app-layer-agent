@@ -10,6 +10,8 @@ WORKDIR /app
 COPY src /app/src
 COPY config /app/config
 COPY package.json /app
+COPY entrypoint.sh /app
+
 RUN npm install --only dev
 RUN npm run build
 
@@ -31,8 +33,8 @@ COPY --from=builder /app/build /app/build
 COPY --from=builder /app/build/config /app/config
 COPY --from=builder /app/node_modules /app/node_modules
 COPY --from=builder /app/package.json /app/package.json
+COPY --from=builder /app/entrypoint.sh /app/entrypoint.sh
 
 WORKDIR /app
 
-CMD ["node", "/app/build/main.js"]
-
+CMD [ "/app/entrypoint.sh" ]
