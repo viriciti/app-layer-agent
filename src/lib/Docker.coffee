@@ -298,6 +298,9 @@ class Docker extends EventEmitter
 	getSharedVolumeName: ->
 		"shared-app-layer-agent"
 
+	pruneImages: ->
+		await @dockerode.pruneImages filters: dangling: 'false' : true
+
 	createSharedVolume: (name) ->
 		try
 			volume = await @dockerode.getVolume @getSharedVolumeName()
