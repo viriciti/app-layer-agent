@@ -62,9 +62,22 @@ class Agent
 
 		@state.notifyOnlineStatus()
 
+		log.info "Starting queue update loop with interval: #{config.queueUpdateInterval} ms"
 		@queueUpdateInterval = setInterval =>
 			@appUpdater.queueUpdate()
 		, config.queueUpdateInterval
+
+		log.info "Starting prune image loop with interval: #{config.pruneImageTimeout} ms"
+		pruneImages = =>
+			debug "Pruning images"
+			try
+				result = await @docker.pruneImages()
+				log.info "Prune images: Images deleted: #{result.ImagesDeleted?.length or 0}. Reclaimed space: #{(result.SpaceReclaimed / 1024 / 1024).toFixed 2} MB"
+			catch error
+				log.warn "An error occured when pruning images: #{error.message}"
+			debug "Images pruned"
+			@pruneImageTimeout = setTimeout pruneImages, config.pruneImageTimeout
+		@pruneImageTimeout = setTimeout pruneImages, 2 * 60 * 1000
 
 	onClose: =>
 		log.warn "Connection closed"
@@ -81,6 +94,7 @@ class Agent
 			.removeListener "global/collections/+", @onCollection
 
 		clearInterval @queueUpdateInterval
+		clearTimeout @pruneImageTimeout
 
 	onGroups: (topic, payload) =>
 		debug "Groups updated. Queue update: #{if @isUpdatableOnGroups then "yes" else "no"}"

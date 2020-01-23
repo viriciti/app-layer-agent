@@ -6,6 +6,8 @@ getEnv = (name, defaultValue) ->
 	defaultValue
 
 module.exports =
+	pruneImageTimeout: 20 * 1000
+
 	queueUpdateInterval: 10 * 1000
 
 	mqtt:
