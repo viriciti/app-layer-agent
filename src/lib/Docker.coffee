@@ -73,12 +73,15 @@ class Docker extends EventEmitter
 				reject error
 
 			handleCorruptedLayer = (message) ->
-				[, source, target] = /(\/.+) (\/.+):/g.exec message
+				matches = /(\/.+) (\/.+):/g.exec message
+				error   = new Error message
+				return reject error unless matches?
 
-				error        = new Error "Corrupted layer: #{source} → #{target}"
-				error.code   = "ERR_CORRUPTED_LAYER"
-				error.source = source
-				error.target = target
+				[, source, target] = matches
+				error              = new Error "Corrupted layer: #{source} → #{target}"
+				error.code         = "ERR_CORRUPTED_LAYER"
+				error.source       = source
+				error.target       = target
 				reject error
 
 			handleGenericError = (error) ->
@@ -330,7 +333,6 @@ class Docker extends EventEmitter
 			await @dockerode.checkAuth config.docker.registryAuth.credentials
 			true
 		catch original
-			console.log original
 			error          = new Error "Incorrect username or password"
 			error.code     = "ERR_AUTH_INCORRECT"
 			error.original = original
