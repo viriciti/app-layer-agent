@@ -26,17 +26,24 @@ mockCorruptedLayer = (docker) ->
 	throw new Error "Invalid Docker client" unless docker instanceof Docker
 
 	docker.dockerode.pull = (name, options, cb) ->
-		layer = [
+		message = [
 			"failed to register layer: rename"
 			"/var/lib/docker/image/overlay/layerdb/tmp/layer-123"
 			"/var/lib/docker/image/overlay/layerdb/sha256/abc:"
 			"directory not empty"
-		]
-		message    = layer.join " "
+		].join " "
 		error      = new Error message
 		error.code = "ERR_CORRUPTED_LAYER"
 
 		cb error
+
+	docker
+
+mockLayerFailure = (docker) ->
+	throw new Error "Invalid Docker client" unless docker instanceof Docker
+
+	docker.dockerode.pull = (name, options, cb) ->
+		cb new Error "failed to register layer: Error processing tar file(exit status 1): write /layer/file: no space left on device"
 
 	docker
 
@@ -114,7 +121,6 @@ describe ".Docker", ->
 			await docker.pullImage "hello-world"
 		catch error
 			return new Error "Callback was called too early" if (Date.now() - date) > expectedMinimumWaitingTime
-
 			assert.equal error.statusCode, 502
 
 	it "should treat corrupted layer as an error", ->
@@ -124,6 +130,14 @@ describe ".Docker", ->
 		assert.rejects ->
 			docker.pullImage "hello-world"
 		, /corrupted layer/i
+
+	it "should not crash if layer fails to register", ->
+		docker = new Docker
+		docker = mockLayerFailure docker
+
+		assert.rejects ->
+			docker.pullImage "hello-world"
+		, /failed to register/
 
 	it "should be able to return a shortened image id", ->
 		docker    = new Docker
