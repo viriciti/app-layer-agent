@@ -171,7 +171,7 @@ class AppUpdater
 
 		return if @isPastLastInstallStep "Pull", appConfig.lastInstallStep
 
-		do
+		while true
 			try
 				await @docker.pullImage name: Image
 
@@ -185,17 +185,6 @@ class AppUpdater
 
 				log.warn "Corrupted layer (#{Image}), removing and continuing ..."
 				await removeRecursively error.target
-		while true
-
-		try
-			await @docker.pullImage name: Image
-		catch error
-			throw error unless error.code is "ERR_CORRUPTED_LAYER"
-
-			if config.docker.retry.removeCorruptedLayer
-				log.warn "Corrupted layer (#{Image}), removing and continuing ..."
-				await removeRecursively error.target
-				await @docker.pullImage name: Image
 
 		return if @isPastLastInstallStep "Clean", appConfig.lastInstallStep
 		await @docker.removeContainer id: name, force: true
