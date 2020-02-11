@@ -1,6 +1,7 @@
 config = require "config"
 debug  = (require "debug") "app:AppUpdater"
 kleur  = require "kleur"
+rmrf   = require "rmfr"
 Queue  = require "p-queue"
 {
 	createGroupsMixin,
@@ -20,7 +21,6 @@ Queue  = require "p-queue"
 } = require "lodash"
 
 log               = (require "../lib/Logger") "AppUpdater"
-removeRecursively = require "../lib/removeRecursively"
 firstKey          = require "../helpers/firstKey"
 
 class AppUpdater
@@ -171,15 +171,20 @@ class AppUpdater
 
 		return if @isPastLastInstallStep "Pull", appConfig.lastInstallStep
 
-		try
-			await @docker.pullImage name: Image
-		catch error
-			throw error unless error.code is "ERR_CORRUPTED_LAYER"
-
-			if config.docker.retry.removeCorruptedLayer
-				log.warn "Corrupted layer (#{Image}), removing and continuing ..."
-				await removeRecursively error.target
+		while true
+			try
 				await @docker.pullImage name: Image
+
+				# When we reach this point, the image has been pulled succesfully
+				break
+			catch error
+				throw error unless (
+					error.code is "ERR_CORRUPTED_LAYER" or
+					config.docker.retry.removeCorruptedLayer
+				)
+
+				log.warn "Corrupted layer (#{Image}), removing and continuing ..."
+				await rmrf error.target
 
 		return if @isPastLastInstallStep "Clean", appConfig.lastInstallStep
 		await @docker.removeContainer id: name, force: true
