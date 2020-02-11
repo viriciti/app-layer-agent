@@ -1,6 +1,7 @@
 config = require "config"
 debug  = (require "debug") "app:AppUpdater"
 kleur  = require "kleur"
+rmrf   = require "rmfr"
 Queue  = require "p-queue"
 {
 	createGroupsMixin,
@@ -20,7 +21,6 @@ Queue  = require "p-queue"
 } = require "lodash"
 
 log               = (require "../lib/Logger") "AppUpdater"
-removeRecursively = require "../lib/removeRecursively"
 firstKey          = require "../helpers/firstKey"
 
 class AppUpdater
@@ -184,7 +184,12 @@ class AppUpdater
 				)
 
 				log.warn "Corrupted layer (#{Image}), removing and continuing ..."
-				await removeRecursively error.target
+				log.warn "Removing recursively: #{error.target}"
+
+				try
+					await rmrf error.target
+				catch error
+					log.error "Failed to remove: #{error.message}"
 
 		return if @isPastLastInstallStep "Clean", appConfig.lastInstallStep
 		await @docker.removeContainer id: name, force: true
