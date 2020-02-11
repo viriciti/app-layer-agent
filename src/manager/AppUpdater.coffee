@@ -171,6 +171,22 @@ class AppUpdater
 
 		return if @isPastLastInstallStep "Pull", appConfig.lastInstallStep
 
+		do
+			try
+				await @docker.pullImage name: Image
+
+				# When we reach this point, the image has been pulled succesfully
+				break
+			catch error
+				throw error unless (
+					error.code is "ERR_CORRUPTED_LAYER" or
+					config.docker.retry.removeCorruptedLayer
+				)
+
+				log.warn "Corrupted layer (#{Image}), removing and continuing ..."
+				await removeRecursively error.target
+		while true
+
 		try
 			await @docker.pullImage name: Image
 		catch error

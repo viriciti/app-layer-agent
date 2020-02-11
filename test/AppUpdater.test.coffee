@@ -58,7 +58,7 @@ describe ".AppUpdater", ->
 		catch error
 			assert.ok error.message.match /no default group/i
 
-	it.only "should be able to rearrange groups", ->
+	it "should be able to rearrange groups", ->
 		firstKey     = (object) -> first Object.keys object
 		updater      = new AppUpdater
 		groups       =
@@ -227,10 +227,7 @@ describe ".AppUpdater", ->
 			AttachStdout: false
 			AttachStderr: false
 			Image:        "hello-world"
-			Env: [
-				"APP_LAYER_PRIVILEGED=false"
-				"APP_LAYER_DETACHED=true"
-			]
+			Env: []
 			Labels:
 				"com.viriciti.applayer.agent": true
 				"com.viriciti.applayer.group": "manual"
