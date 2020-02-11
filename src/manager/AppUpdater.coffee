@@ -184,12 +184,7 @@ class AppUpdater
 				)
 
 				log.warn "Corrupted layer (#{Image}), removing and continuing ..."
-				log.warn "Removing recursively: #{error.target}"
-
-				try
-					await rmrf error.target
-				catch error
-					log.error "Failed to remove: #{error.message}"
+				await rmrf error.target
 
 		return if @isPastLastInstallStep "Clean", appConfig.lastInstallStep
 		await @docker.removeContainer id: name, force: true
