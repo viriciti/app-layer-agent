@@ -183,7 +183,7 @@ class AppUpdater
 					config.docker.retry.removeCorruptedLayer
 				)
 
-				log.warn "Corrupted layer (#{Image}), removing and continuing ..."
+				log.warn "Corrupted layer (#{Image}, directory: #{error.target}), removing and continuing ..."
 				await rmrf error.target
 
 		return if @isPastLastInstallStep "Clean", appConfig.lastInstallStep
