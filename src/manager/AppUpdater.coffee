@@ -171,20 +171,34 @@ class AppUpdater
 
 		return if @isPastLastInstallStep "Pull", appConfig.lastInstallStep
 
+		debug "Starting while loop on image pull"
+		whileLoopCount = 0
 		while true
+			++whileLoopCount
 			try
+				debug "While loop count #{whileLoopCount}: calling docker pull image"
 				await @docker.pullImage name: Image
 
+				debug "While loop count #{whileLoopCount}: breaking the loop"
 				# When we reach this point, the image has been pulled succesfully
 				break
 			catch error
+				debug "While loop count #{whileLoopCount}: caught an error: #{error.message}", error
+				log.error "Got an error pulling image `#{Image}`: #{error.message}"
+
 				throw error unless (
-					error.code is "ERR_CORRUPTED_LAYER" or
+					error.code is "ERR_CORRUPTED_LAYER" and
 					config.docker.retry.removeCorruptedLayer
 				)
 
+				debug "While loop count #{whileLoopCount}: removing target from error message: #{error.target}"
 				log.warn "Corrupted layer (#{Image}, directory: #{error.target}), removing and continuing ..."
 				await rmrf error.target
+				debug "While loop count #{whileLoopCount}: Removing done"
+
+				if whileLoopCount is config.docker.retry.maxAttempts
+					log.warn "Tried to pull image #{Image} #{config.docker.retry.maxAttempts} times. Really stopping this now."
+					throw new Error "Max retry for Docker pull reached."
 
 		return if @isPastLastInstallStep "Clean", appConfig.lastInstallStep
 		await @docker.removeContainer id: name, force: true

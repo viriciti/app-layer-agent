@@ -54,7 +54,6 @@ class Docker extends EventEmitter
 		return log.warn "Skipping #{name}, image is already downloaded" if find await @listImages(), name: name
 
 		log.info "Downloading #{name} (retrying on status codes #{config.docker.retry.errorCodes.join ', '})..."
-
 		new Promise (resolve, reject) =>
 			retryIn       = 1000 * 60
 			pullInterval  = setInterval =>
@@ -70,18 +69,23 @@ class Docker extends EventEmitter
 			handleUnauthorized = (error) ->
 				error      = new Error "No permission to download #{name}"
 				error.code = "ERR_DOCKER_UNAUTHORIZED"
+				clearInterval pullInterval
 				reject error
 
 			handleCorruptedLayer = (message) ->
 				matches = /(\/.+) (\/.+):/g.exec message
 				error   = new Error message
-				return reject error unless matches?
+				unless matches?
+					clearInterval pullInterval
+					return reject error
 
 				[, source, target] = matches
 				error              = new Error "Corrupted layer: #{source} → #{target}"
 				error.code         = "ERR_CORRUPTED_LAYER"
 				error.source       = source
 				error.target       = target
+
+				clearInterval pullInterval
 				reject error
 
 			handleGenericError = (error) ->
