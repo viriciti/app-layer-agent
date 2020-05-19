@@ -9,6 +9,7 @@ Queue  = require "p-queue"
 }  = require "@viriciti/app-layer-logic"
 {
 	isEmpty,
+	isPlainObject,
 	pickBy,
 	first,
 	debounce,
@@ -17,7 +18,8 @@ Queue  = require "p-queue"
 	omit,
 	partial,
 	keys,
-	reduce
+	reduce,
+	without
 } = require "lodash"
 
 log               = (require "../lib/Logger") "AppUpdater"
@@ -49,12 +51,20 @@ class AppUpdater
 			log.error "Failed to update: #{error.message or error}"
 
 	rearrange: (source) ->
-		return source if firstKey(source) is "default"
+		if isPlainObject source
+			return source if firstKey(source) is "default"
 
-		copy = omit source, "default"
-		copy = Object.assign {}, default: source.default or {}, copy
+			copy = omit source, "default"
+			copy = Object.assign {}, default: source.default or {}, copy
 
-		copy
+			copy
+		else
+			return source if first(source) is "default"
+
+			copy = without source, "default"
+			copy = ["default", ...copy]
+
+			copy
 
 	accountForNotRunning: (currentApps) ->
 		appsToDelete = reduce currentApps, (m, container, name) ->
@@ -79,8 +89,8 @@ class AppUpdater
 		debug "Global groups are", globalGroups
 		debug "Device groups are", groups
 
-		throw new Error "No global groups"                if isEmpty globalGroups
-		throw new Error "No default group"                unless globalGroups["default"]
+		throw new Error "No global groups" if isEmpty globalGroups
+		throw new Error "No default group" unless globalGroups["default"]
 
 		log.info "Calculating updates ..."
 
