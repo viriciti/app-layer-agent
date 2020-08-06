@@ -122,6 +122,7 @@ class Agent
 	onLogs: (data) =>
 		return unless data
 
+		@appUpdater.handleLog data
 		@state.throttledSendAppState() if data.action?.type is "container"
 		@state.publishLog data
 

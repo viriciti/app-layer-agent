@@ -1,5 +1,5 @@
 # STAGE 1
-FROM viriciti/app-layer-base-image-armhf-alpine-node:10 as builder
+FROM docker.viriciti.com/viriciti/datahub/armhf-alpine-node:12-build as builder
 RUN ["cross-build-start"]
 
 # Create app directory
@@ -21,7 +21,7 @@ RUN rm -r node_modules && \
 RUN ["cross-build-end"]
 
 # STAGE 2
-FROM viriciti/app-layer-base-image-armhf-alpine-node:10
+FROM docker.viriciti.com/viriciti/datahub/armhf-alpine-node:12
 
 # Configure environment
 ENV NODE_CONFIG_DIR=/app/config

@@ -14,19 +14,26 @@ class DockerLogsParser
 					when "delete" then @_handleDeleteImageLogs logs
 			when "container"
 				switch logs.Action
-					when "create"  then @_handleCreateContainerLogs  logs
-					when "start"   then @_handleStartContainerLogs   logs
-					when "stop"    then @_handleStopContainerLogs    logs
-					when "destroy" then @_handleDestroyContainerLogs logs
+					when "create"        then @_handleCreateContainerLogs  logs
+					when "start"         then @_handleStartContainerLogs   logs
+					when "stop"          then @_handleStopContainerLogs    logs
+					when "destroy"       then @_handleDestroyContainerLogs logs
+					else
+						@_handleHealthLogs logs if -1 < logs.Action.indexOf "health_status"
 
 	generateMessage: ({ raw, message, type = "info" }) ->
 		{ Actor, Action, Type, time } = raw
 		{ Attributes }                = Actor
 		{ name, image }               = Attributes
 
+		health = undefined
+		health = Action.split(": ")[1] if -1 < Action.indexOf "health_status"
+		type   = "warning" if health is "unhealthy"
+
 		message: (message
-			.replace /{name}/g,  name
-			.replace /{image}/g, image
+			.replace /{name}/g,   name
+			.replace /{image}/g,  image
+			.replace /{health}/g, health
 		)
 		type:    type
 		time:    time * 1000
@@ -34,6 +41,8 @@ class DockerLogsParser
 			action: Action
 			name:   name
 			type:   Type
+		health: health
+		id:     Actor.ID
 
 	_handlePullImageLogs: (logs) ->
 		@generateMessage
@@ -74,6 +83,11 @@ class DockerLogsParser
 		@generateMessage
 			raw:     logs
 			message: "A container has been destroyed"
+
+	_handleHealthLogs: (logs) ->
+		@generateMessage
+			raw:     logs
+			message: "Container {name} health is {health}"
 
 	_handleDyingContainer: (logs) ->
 		@generateMessage
