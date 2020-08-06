@@ -17,8 +17,8 @@ Queue  = require "p-queue"
 	map,
 	omit,
 	partial,
-	keys,
 	reduce,
+	keys,
 	without
 } = require "lodash"
 
@@ -41,12 +41,15 @@ class AppUpdater
 		@queueUpdate groups, names
 
 	queueUpdate: (globalGroups, groups) ->
+		debug "queueUpdate called"
+
 		globalGroups or= @groupManager.getGroupConfigurations()
 		groups       or= @groupManager.getGroups()
 
 		try
 			await @docker.createSharedVolume()
 			await @queue.add partial @doUpdate, globalGroups, groups
+			await @recreateUnhealthyContainers()
 		catch error
 			log.error "Failed to update: #{error.message or error}"
 
@@ -86,21 +89,24 @@ class AppUpdater
 		omit currentApps, map appsToDelete, "name"
 
 	doUpdate: (globalGroups, groups) =>
-		debug "Global groups are", globalGroups
-		debug "Device groups are", groups
+		debug "doUpdate: Global groups are", globalGroups
+		debug "doUpdate: Device groups are", groups
 
 		throw new Error "No global groups" if isEmpty globalGroups
 		throw new Error "No default group" unless globalGroups["default"]
 
+		@globalGroups = globalGroups
+		@groups       = groups
+
 		log.info "Calculating updates ..."
 
-		groups         = @rearrange groups unless first(Object.keys globalGroups) is "default"
+		groups         = @rearrange @groups unless first(Object.keys @globalGroups) is "default"
 		currentApps    = await @docker.listContainers()
 		currentApps    = {} unless config.docker.container.allowRemoval
 		currentApps    = omit currentApps, config.docker.container.whitelist
 		currentApps    = await @accountForNotRunning currentApps
 
-		extendedGroups = createGroupsMixin globalGroups,   groups
+		extendedGroups = createGroupsMixin @globalGroups,   groups
 		appsToChange   = getAppsToChange   extendedGroups, currentApps
 		updatesCount   = appsToChange.install.length + appsToChange.remove.length
 
@@ -164,6 +170,35 @@ class AppUpdater
 			@state.throttledSendState()
 
 		appsToChange.install.length + appsToChange.remove.length
+
+	handleLog: (data) ->
+		return unless data.health
+		return if data.health isnt "unhealthy"
+
+		log.warn "Identified unhealthy app from log events: #{data.action.name}"
+		@recreateUnhealthyContainers()
+
+	recreateUnhealthyContainers: ->
+		log.info "Checking for unhealthy apps..."
+		apps = await @docker.listContainers JSON.stringify health: ["unhealthy"]
+		apps = reduce apps, (arr, app, name) ->
+			if app.labels?.group and app.labels?.manual is "false"
+				arr.push { id: app.Id, name, group: app.labels?.group }
+			arr
+		, []
+
+		return log.info "Found no unhealthy apps :)" unless apps.length
+
+		log.warn "Detected #{apps.length} apps in unhealthy state: #{(map apps, "name").join ", "}"
+
+		await Promise.all apps.map (app) =>
+			log.warn "Removing container #{app.name} (group #{app.group}) due to unhealthy state"
+			@docker.removeContainer id: app.id, force: true
+
+		return if not @globalGroups["default"]
+		return if isEmpty @globalGroups
+
+		await @queue.add partial @doUpdate, @globalGroups, @groups
 
 	removeApps: (apps) ->
 		await Promise.all apps.map (app) =>

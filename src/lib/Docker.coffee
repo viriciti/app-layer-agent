@@ -180,8 +180,12 @@ class Docker extends EventEmitter
 				log.error error.message
 				throw error
 
-	listContainers: =>
-		containers         = await @dockerode.listContainers all: true
+	listContainers: (filters) =>
+		params = { all: true, filters }
+
+		debug "listContainers, with params", params
+
+		containers         = await @dockerode.listContainers params
 		containersDetailed = await Promise.all containers.map (container) =>
 			name = container.Names[0].replace "/", ""
 			[name, await @getContainerByName name]
@@ -221,6 +225,7 @@ class Docker extends EventEmitter
 			status:   containerInfo.State.Status
 			exitCode: containerInfo.State.ExitCode
 			running:  containerInfo.State.Running
+			health:   containerInfo.State.Health?.Status
 		ports:          containerInfo.HostConfig.PortBindings
 		environment:    containerInfo.Config.Env
 		sizeFilesystem: containerInfo.SizeRw          # in bytes
