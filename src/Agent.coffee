@@ -50,7 +50,7 @@ class Agent
 		@docker
 			.on "logs", @onLogs
 
-		log.warn "Waiting for groups before sending state ..."
+		log.notice "Waiting for groups before sending state ..."
 		@client
 			.once "devices/{id}/groups", (topic, payload) =>
 				@client.subscribe "global/collections/+"

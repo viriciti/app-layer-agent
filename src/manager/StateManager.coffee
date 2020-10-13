@@ -35,7 +35,7 @@ class StateManager
 		byteLength  = Buffer.byteLength stringified, "utf8"
 
 		if byteLength > 20000
-			log.warn "State exceeds recommended byte length: #{byteLength}/20000 bytes"
+			log.notice "State exceeds recommended byte length: #{byteLength}/20000 bytes"
 
 		await @publish
 			topic:   "state"

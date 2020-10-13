@@ -51,7 +51,7 @@ class Docker extends EventEmitter
 		kernel:     info.KernelVersion
 
 	pullImage: ({ name }, force = false) =>
-		return log.warn "Skipping #{name}, image is already downloaded" if find await @listImages(), name: name
+		return log.notice "Skipping #{name}, image is already downloaded" if find await @listImages(), name: name
 
 		log.info "Downloading #{name} (retrying on status codes #{config.docker.retry.errorCodes.join ', '})..."
 		new Promise (resolve, reject) =>
