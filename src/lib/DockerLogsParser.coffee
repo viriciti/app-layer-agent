@@ -24,16 +24,17 @@ class DockerLogsParser
 	generateMessage: ({ raw, message, type = "info" }) ->
 		{ Actor, Action, Type, time } = raw
 		{ Attributes }                = Actor
-		{ name, image }               = Attributes
+		{ name, image, exitCode }     = Attributes
 
 		health = undefined
 		health = Action.split(": ")[1] if -1 < Action.indexOf "health_status"
 		type   = "warning" if health is "unhealthy"
 
 		message: (message
-			.replace /{name}/g,   name
-			.replace /{image}/g,  image
-			.replace /{health}/g, health
+			.replace /{name}/g,     name
+			.replace /{image}/g,    image
+			.replace /{health}/g,   health
+			.replace /{exitCode}/g, exitCode
 		)
 		type:    type
 		time:    time * 1000
@@ -92,7 +93,7 @@ class DockerLogsParser
 	_handleDyingContainer: (logs) ->
 		@generateMessage
 			raw:     logs
-			message: "Container {name} has died"
+			message: "Container {name} has died with exit code {exitCode}"
 			type:    "warning"
 
 module.exports = DockerLogsParser
