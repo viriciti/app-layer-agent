@@ -12,6 +12,11 @@ Queue  = require "p-queue"
 	isPlainObject,
 	pickBy,
 	first,
+	compact,
+	find,
+	flatten,
+	filter,
+	sortBy,
 	debounce,
 	each,
 	map,
@@ -207,8 +212,37 @@ class AppUpdater
 				force: true
 
 	installApps: (apps) ->
-		await Promise.all apps.map (app) =>
-			@installApp app
+		# deep clone ;)
+		apps = JSON.parse JSON.stringify apps
+
+		# add a dependency count
+		each apps, (app) ->
+			each (app.dependencies or []), (dependency) ->
+				dep = find apps, applicationName: dependency
+				if dep
+					dep.dependencyCount ?= 0
+					dep.dependencyCount++
+
+		# recusrive sorting based on dependeny
+		sortFn = (app) ->
+			app.visited = true
+			app.dependencies or= []
+			(flatten map app.dependencies, (dependency) ->
+				dep = find apps, applicationName: dependency
+				return unless dep
+				sortFn dep unless dep.visited
+			).concat app
+
+		order  = compact flatten map apps, (app) -> sortFn app unless app.visited
+		head   = filter order, (app) -> app.dependencyCount
+		head   = sortBy head, (app) -> -1 * app.dependencyCount or 0
+		tail   = filter order, (app) -> not app.dependencyCount
+		tail   = sortBy tail, (app) -> -1 * (app.dependencies?.length or 0)
+		result = head.concat tail
+
+		console.log "ORDER", (map result, "applicationName").join " → "
+
+		await @installApp app for app in result
 
 	installApp: (appConfig) ->
 		normalized      = @normalizeAppConfiguration appConfig
