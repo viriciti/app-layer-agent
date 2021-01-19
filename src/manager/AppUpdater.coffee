@@ -240,7 +240,7 @@ class AppUpdater
 		tail   = sortBy tail, (app) -> -1 * (app.dependencies?.length or 0)
 		result = head.concat tail
 
-		console.log "ORDER", (map result, "applicationName").join " → "
+		log.info "Installing apps: #{(map result, "applicationName").join " → "}"
 
 		await @installApp app for app in result
 
