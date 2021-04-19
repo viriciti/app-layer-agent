@@ -93,6 +93,26 @@ class AppUpdater
 		await @removeApps map appsToDelete, "id"
 		omit currentApps, map appsToDelete, "name"
 
+	accountForMisconfiguredLogDriver: (currentApps) ->
+		appsToDelete = reduce currentApps, (m, container, name) ->
+			id         = container.id
+			logDriver  = container.logDriver
+			systemInfo = await @docker.getSystemInfo()
+
+			if logDriver isnt systemInfo.LoggingDriver
+				log.warn "App `#{name}` is using different log driver `#{logDriver}` than system has configured: `#{systemInfo.LoggingDriver}`. Scheduled for removal and recreation.."
+				m.push {name, id}
+			m
+		, []
+
+		if apps.length
+			log.warn "Apps using incorrect log driver: #{(map appsToDelete, "name").join ", "}"
+		else
+			log.info "No misconfigured apps"
+
+		await @removeApps map appsToDelete, "id"
+		omit currentApps, map appsToDelete, "name"
+
 	doUpdate: (globalGroups, groups) =>
 		debug "doUpdate: Global groups are", globalGroups
 		debug "doUpdate: Device groups are", groups
@@ -110,6 +130,7 @@ class AppUpdater
 		currentApps    = {} unless config.docker.container.allowRemoval
 		currentApps    = omit currentApps, config.docker.container.whitelist
 		currentApps    = await @accountForNotRunning currentApps
+		currentApps    = await @accountForMisconfiguredLogDriver currentApps
 
 		extendedGroups = createGroupsMixin @globalGroups,   groups
 		appsToChange   = getAppsToChange   extendedGroups, currentApps
