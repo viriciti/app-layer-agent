@@ -105,7 +105,7 @@ class AppUpdater
 			m
 		, []
 
-		if apps.length
+		if appsToDelete.length
 			log.warn "Apps using incorrect log driver: #{(map appsToDelete, "name").join ", "}"
 		else
 			log.info "No misconfigured apps"
