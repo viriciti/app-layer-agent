@@ -94,10 +94,10 @@ class AppUpdater
 		omit currentApps, map appsToDelete, "name"
 
 	accountForMisconfiguredLogDriver: (currentApps) ->
+		systemInfo   = await @docker.getSystemInfo()
 		appsToDelete = reduce currentApps, (m, container, name) ->
 			id         = container.id
 			logDriver  = container.logDriver
-			systemInfo = await @docker.getSystemInfo()
 
 			if logDriver isnt systemInfo.LoggingDriver
 				log.warn "App `#{name}` is using different log driver `#{logDriver}` than system has configured: `#{systemInfo.LoggingDriver}`. Scheduled for removal and recreation.."
