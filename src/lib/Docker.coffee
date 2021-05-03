@@ -227,6 +227,7 @@ class Docker extends EventEmitter
 			running:  containerInfo.State.Running
 			health:   containerInfo.State.Health?.Status
 		ports:          containerInfo.HostConfig.PortBindings
+		logDriver:      containerInfo.HostConfig.LogConfig.Type
 		environment:    containerInfo.Config.Env
 		sizeFilesystem: containerInfo.SizeRw          # in bytes
 		sizeRootFilesystem: containerInfo.SizeRootFs # in bytes
@@ -346,6 +347,12 @@ class Docker extends EventEmitter
 			error.code     = "ERR_AUTH_INCORRECT"
 			error.original = original
 
+			throw error
+
+	getSystemInfo: ->
+		try
+			await @dockerode.info()
+		catch error
 			throw error
 
 module.exports = Docker
