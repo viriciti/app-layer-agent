@@ -303,6 +303,11 @@ class AppUpdater
 		return if @isPastLastInstallStep "Clean", appConfig.lastInstallStep
 		await @docker.removeContainer id: name, force: true
 
+		try
+			await @docker.disconnectEndpoint "host", name
+		catch error
+			log.warn "Could not disconnect #{name} from network host: #{error.message}"
+
 		await @docker.createVolumeIfNotExists name
 
 		return if @isPastLastInstallStep "Create", appConfig.lastInstallStep
