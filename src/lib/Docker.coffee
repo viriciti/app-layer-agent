@@ -2,7 +2,7 @@ Dockerode                                    = require "dockerode"
 async                                        = require "async"
 config                                       = require "config"
 { EventEmitter }                             = require "events"
-{ every, isEmpty, random, find }             = require "lodash"
+{ every, isEmpty, random, find, values }     = require "lodash"
 { filterUntaggedImages, getRemovableImages } = require "@viriciti/app-layer-logic"
 debug                                        = (require "debug") "app:Docker"
 
@@ -227,6 +227,7 @@ class Docker extends EventEmitter
 			running:  containerInfo.State.Running
 			health:   containerInfo.State.Health?.Status
 		ports:          containerInfo.HostConfig.PortBindings
+		logDriver:      containerInfo.HostConfig.LogConfig.Type
 		environment:    containerInfo.Config.Env
 		sizeFilesystem: containerInfo.SizeRw          # in bytes
 		sizeRootFilesystem: containerInfo.SizeRootFs # in bytes
@@ -346,6 +347,24 @@ class Docker extends EventEmitter
 			error.code     = "ERR_AUTH_INCORRECT"
 			error.original = original
 
+			throw error
+
+	getSystemInfo: ->
+		try
+			await @dockerode.info()
+		catch error
+			throw error
+
+	disconnectEndpoint: (networkId, name) ->
+		network = @dockerode.getNetwork networkId
+		info = await network.inspect()
+		containerInfo = find (values info.Containers), Name: name
+		return unless containerInfo
+
+		try
+			await network.disconnect Container: name, Force: true
+		catch error
+			debug "Disconnecting endpoint error: %s", error
 			throw error
 
 module.exports = Docker
