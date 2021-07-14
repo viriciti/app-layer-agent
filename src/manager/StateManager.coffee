@@ -1,5 +1,6 @@
 { throttle, isString, isEqual, isPlainObject, map, defaultTo } = require "lodash"
 config                                                         = require "config"
+debug                                                          = (require "debug") "app:manager:state-manager"
 
 pkg            = require "../../package.json"
 getIPAddresses = require "../helpers/getIPAddresses"
@@ -29,6 +30,23 @@ class StateManager
 
 		@socket.publish topic, message, options.opts
 
+	heartbeat: =>
+		now = new Date
+
+		if @latestHeartbeat
+			diff = +now - +@latestHeartbeat
+			if diff < config.heartbeatMinInterval
+				debug "Not sending heartbeat: interval %d is smaller then minimum %d", diff, config.heartbeatMinInterval
+				return
+
+		debug "Sending heartbeat on %s", now
+		@publish
+			topic:   "heartbeat"
+			message: now
+			opts:    retain: true
+
+		@latestHeartbeat = now
+
 	sendStateToMqtt: =>
 		state       = await @generateStateObject()
 		stringified = JSON.stringify state
@@ -36,6 +54,8 @@ class StateManager
 
 		if byteLength > 20000
 			log.warn "State exceeds recommended byte length: #{byteLength}/20000 bytes"
+
+		@heartbeat()
 
 		await @publish
 			topic:   "state"
@@ -45,11 +65,15 @@ class StateManager
 		log.info "State published"
 
 	sendAppStateToMqtt: =>
+		@heartbeat()
+
 		@publish
 			topic:   "nsState/containers"
 			message: await @docker.listContainers()
 
 	sendSystemStateToMqtt: =>
+		@heartbeat()
+
 		systemInfo = await @docker.getDockerInfo()
 		addresses  = getIPAddresses()
 		appVersion = pkg.version
@@ -62,12 +86,16 @@ class StateManager
 				appVersion: appVersion
 
 	notifyOnlineStatus: =>
+		@heartbeat()
+
 		@publish
 			topic:   "status"
 			message: "online"
 			opts:    retain: true
 
 	publishLog: ({ type, message, time }) ->
+		@heartbeat()
+
 		@publish
 			topic:   "logs"
 			message: { type, message, time }
@@ -80,6 +108,9 @@ class StateManager
 			return if isEqual @nsState[key], nsState[key]
 
 			@nsState[key] = nsState[key]
+
+			@heartbeat()
+
 			@publish
 				topic:   "nsState/#{key}"
 				message: value

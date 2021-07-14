@@ -10,6 +10,8 @@ module.exports =
 
 	queueUpdateInterval: 10 * 1000
 
+	heartbeatMinInterval: 5 * 1000
+
 	mqtt:
 		host:     getEnv "MQTT_ENDPOINT", "localhost"
 		port:     getEnv "MQTT_PORT",     1883

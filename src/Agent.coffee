@@ -65,6 +65,7 @@ class Agent
 		log.info "Starting queue update loop with interval: #{config.queueUpdateInterval} ms"
 		@queueUpdateInterval = setInterval =>
 			@appUpdater.queueUpdate()
+			@state.heartbeat()
 		, config.queueUpdateInterval
 
 		log.info "Starting prune image loop with interval: #{config.pruneImageTimeout} ms"
